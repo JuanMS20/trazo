@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Trazo</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&family=Kalam:wght@400;700&family=Merriweather:wght@300;400;700&family=Space+Grotesk:wght@400;500;700&family=Manrope:wght@400;700;800&family=Caveat:wght@700&display=swap"
+      rel="stylesheet"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
+    />
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              primary: "#f4d125",
+              "background-light": "#f8f8f5",
+              "background-dark": "#221f10",
+              "off-black": "#1E293B",
+              cream: "#FDFBF7",
+            },
+            fontFamily: {
+              sans: ["Inter", "sans-serif"],
+              display: ["Manrope", "sans-serif"],
+              serif: ["Merriweather", "serif"],
+              handwritten: ["Kalam", "cursive"],
+              caveat: ["Caveat", "cursive"],
+              grotesk: ["Space Grotesk", "sans-serif"],
+            },
+            boxShadow: {
+              'offset-hard': '4px 4px 0px 0px rgba(30, 41, 59, 1)',
+              'offset-hard-sm': '2px 2px 0px 0px rgba(30, 41, 59, 1)',
+            }
+          },
+        },
+      };
+    </script>
+    <style>
+      .material-symbols-outlined {
+        font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      .filled-icon {
+        font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+      }
+      
+      /* Organic Border Utility */
+      .organic-radius {
+        border-radius: 255px 15px 225px 15px / 15px 225px 15px 255px;
+      }
+      
+      /* Custom Scrollbar for the editor */
+      .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+      }
+      .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+      }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0"
+  }
+}
+</script>
+</head>
+  <body class="bg-background-light text-off-black">
+    <div id="root"></div>
+  </body>
+</html>
