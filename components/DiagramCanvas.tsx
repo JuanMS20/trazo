@@ -5,9 +5,10 @@ import { RoughEdge } from './RoughEdge';
 
 interface DiagramCanvasProps {
   data: DiagramData | null;
+  onNodeDrag: (id: string, x: number, y: number) => void;
 }
 
-export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({ data }) => {
+export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({ data, onNodeDrag }) => {
   if (!data) {
     return (
       <div className="flex items-center justify-center h-full text-gray-400 font-handwritten text-xl">
@@ -18,6 +19,7 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({ data }) => {
 
   return (
     <div className="relative w-full h-full">
+      {/* Edges rendered first so they are behind nodes */}
       {data.edges.map((edge, i) => {
         const fromNode = data.nodes.find(n => n.id === edge.fromId);
         const toNode = data.nodes.find(n => n.id === edge.toId);
@@ -36,7 +38,12 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({ data }) => {
       })}
 
       {data.nodes.map((node, i) => (
-        <RoughNode key={node.id} node={node} index={i} />
+        <RoughNode
+            key={node.id}
+            node={node}
+            index={i}
+            onDrag={onNodeDrag}
+        />
       ))}
     </div>
   );

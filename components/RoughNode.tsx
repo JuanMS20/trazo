@@ -1,15 +1,18 @@
 import React, { useEffect, useRef } from 'react';
 import rough from 'roughjs';
 import { motion } from 'framer-motion';
+import Draggable from 'react-draggable';
 import { DiagramNode } from '../types';
 
 interface RoughNodeProps {
   node: DiagramNode;
   index: number;
+  onDrag: (id: string, x: number, y: number) => void;
 }
 
-export const RoughNode: React.FC<RoughNodeProps> = ({ node, index }) => {
+export const RoughNode: React.FC<RoughNodeProps> = ({ node, index, onDrag }) => {
   const svgRef = useRef<SVGSVGElement>(null);
+  const nodeRef = useRef(null);
 
   useEffect(() => {
     if (svgRef.current) {
@@ -19,17 +22,16 @@ export const RoughNode: React.FC<RoughNodeProps> = ({ node, index }) => {
         svgRef.current.removeChild(svgRef.current.firstChild);
       }
 
-      // Enhanced options for sketchier look
       const options = {
-        roughness: 2.5, // More shaky
-        bowing: 2, // More curved lines
+        roughness: 2.5,
+        bowing: 2,
         fill: node.color || 'white',
-        fillStyle: 'hachure', // Sketchy fill
-        fillWeight: 1, // Thinner fill lines
-        hachureGap: 4, // Spaced out fill
+        fillStyle: 'hachure',
+        fillWeight: 1,
+        hachureGap: 4,
         stroke: '#1e293b',
         strokeWidth: 2,
-        disableMultiStroke: false // Double lines for extra sketchiness
+        disableMultiStroke: false
       };
 
       let shape;
@@ -56,51 +58,56 @@ export const RoughNode: React.FC<RoughNodeProps> = ({ node, index }) => {
   }, [node]);
 
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.5, y: 20 }}
-      animate={{
-          opacity: 1,
-          scale: 1,
-          y: 0,
-          // Subtle wobble animation
-          rotate: [0, -1, 1, -0.5, 0.5, 0],
-      }}
-      transition={{
-        type: 'spring',
-        stiffness: 260,
-        damping: 20,
-        delay: index * 0.1,
-        rotate: {
-             duration: 5,
-             repeat: Infinity,
-             repeatType: "reverse",
-             ease: "easeInOut"
-        }
-      }}
-      className="absolute flex flex-col items-center justify-center text-center p-2"
-      style={{
-        left: node.x - node.width / 2,
-        top: node.y - node.height / 2,
-        width: node.width,
-        height: node.height,
-      }}
+    <Draggable
+        nodeRef={nodeRef}
+        defaultPosition={{ x: node.x - node.width / 2, y: node.y - node.height / 2 }}
+        // Instead of controlled position, we use defaultPosition and sync on stop/drag
+        // But for diagram updates (edges), we might need controlled or callback
+        onStop={(e, data) => {
+            // Calculate center
+            onDrag(node.id, data.x + node.width / 2, data.y + node.height / 2);
+        }}
     >
-      <svg
-        ref={svgRef}
-        className="absolute inset-0 w-full h-full pointer-events-none overflow-visible"
-      />
+        <motion.div
+        ref={nodeRef}
+        initial={{ opacity: 0, scale: 0.5 }}
+        animate={{
+            opacity: 1,
+            scale: 1,
+            // Subtle wobble removed from here if Draggable conflicts, but let's try keeping it
+            // Draggable applies transform: translate. Framer motion applies transform too.
+            // They might conflict.
+            // Better to wrap inner content with wobble or use Draggable purely.
+            // For robustness: Remove Framer Motion transform animations on the Draggable root.
+        }}
+        transition={{
+            type: 'spring',
+            stiffness: 260,
+            damping: 20,
+            delay: index * 0.1,
+        }}
+        className="absolute flex flex-col items-center justify-center text-center p-2 cursor-grab active:cursor-grabbing"
+        style={{
+            // Position handled by Draggable via transform
+            width: node.width,
+            height: node.height,
+        }}
+        >
+        <svg
+            ref={svgRef}
+            className="absolute inset-0 w-full h-full pointer-events-none overflow-visible"
+        />
 
-      {/* Icon rendering */}
-      {node.icon && (
-          <span className="relative z-10 material-symbols-outlined text-3xl mb-1 text-off-black/80">
-              {node.icon}
-          </span>
-      )}
+        {node.icon && (
+            <span className="relative z-10 material-symbols-outlined text-3xl mb-1 text-off-black/80 pointer-events-none select-none">
+                {node.icon}
+            </span>
+        )}
 
-      {/* Use 'font-caveat' for handwritten look */}
-      <span className="relative z-10 text-lg font-caveat font-bold leading-tight pointer-events-none select-none text-off-black">
-        {node.text}
-      </span>
-    </motion.div>
+        <span className="relative z-10 text-lg font-caveat font-bold leading-tight pointer-events-none select-none text-off-black">
+            {node.text}
+        </span>
+        </motion.div>
+    </Draggable>
   );
 };

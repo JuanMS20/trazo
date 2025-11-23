@@ -22,10 +22,37 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
   const [editorContent, setEditorContent] = useState<string>('');
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const canvasRef = useRef<HTMLDivElement>(null); // For Export
 
   // Agent state
   const [isProcessing, setIsProcessing] = useState(false);
   const [processStep, setProcessStep] = useState('');
+
+  // Persistence: Load on Mount
+  useEffect(() => {
+    const savedContent = localStorage.getItem('trazo_editor_content');
+    const savedDiagram = localStorage.getItem('trazo_diagram_data');
+
+    if (savedContent) setEditorContent(savedContent);
+    if (savedDiagram) {
+        try {
+            setDiagramData(JSON.parse(savedDiagram));
+        } catch (e) {
+            console.error("Failed to parse saved diagram", e);
+        }
+    }
+  }, []);
+
+  // Persistence: Save on Change
+  useEffect(() => {
+    localStorage.setItem('trazo_editor_content', editorContent);
+  }, [editorContent]);
+
+  useEffect(() => {
+    if (diagramData) {
+        localStorage.setItem('trazo_diagram_data', JSON.stringify(diagramData));
+    }
+  }, [diagramData]);
 
   const handleSelection = (triggerEvent?: React.SyntheticEvent) => {
     const textarea = textareaRef.current;
@@ -38,11 +65,6 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
       const text = textarea.value.substring(start, end);
       setSelectedText(text);
 
-      // If triggered by mouse, we use mouse coordinates (passed via triggerEvent if available)
-      // If keyboard (onSelect), we might need to approximate or just use a default position?
-      // Textarea cursor coordinates are hard.
-      // For MVP, if no mouse event, we center it or put it near the textarea.
-
       let top = 0;
       let left = 0;
 
@@ -51,8 +73,6 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
           top = mouseEvent.clientY + 10;
           left = mouseEvent.clientX + 10;
       } else {
-          // Fallback for keyboard selection: Position near the center of the textarea or bottom right
-          // Ideally we would calculate caret position, but that requires a library or complex logic.
           const rect = textarea.getBoundingClientRect();
           top = rect.top + rect.height / 2;
           left = rect.left + rect.width / 2;
@@ -61,7 +81,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
       setContextMenuPosition({ top, left });
       setShowContextMenu(true);
     } else {
-      // setShowContextMenu(false); // Optional: hide on deselect
+      // Optional: hide on deselect
     }
   };
 
@@ -70,13 +90,10 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
   };
 
   const handleKeyUp = (e: React.KeyboardEvent) => {
-      // specific keys like Shift+Arrow or Ctrl+A might trigger selection
-      // It's easier to just check selection on every keyup or use onSelect
       handleSelection();
   };
 
   const handleSelect = (e: React.SyntheticEvent) => {
-      // onSelect fires when selection changes
       handleSelection(e);
   };
 
@@ -110,13 +127,24 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
   const handleToolChange = (tool: ToolType) => {
     setActiveTool(tool);
     if (tool === 'zoom') {
-        setZoomLevel(prev => Math.min(prev + 0.1, 2)); // Simulate zoom in
-        setTimeout(() => setActiveTool('edit'), 500); // Switch back to edit after zoom action
+        setZoomLevel(prev => Math.min(prev + 0.1, 2));
+        setTimeout(() => setActiveTool('edit'), 500);
     }
   };
 
   const handleContextOptionClick = (label: string) => {
     runAgentPipeline(selectedText || editorContent || "Texto de ejemplo");
+  };
+
+  // Node Drag Handler
+  const handleNodeDrag = (id: string, x: number, y: number) => {
+    setDiagramData(prev => {
+        if (!prev) return null;
+        return {
+            ...prev,
+            nodes: prev.nodes.map(n => n.id === id ? { ...n, x, y } : n)
+        };
+    });
   };
 
   return (
@@ -154,7 +182,6 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
                     onKeyUp={handleKeyUp}
                 />
                 
-                {/* Floating Context Menu Button (Visible when selection exists) */}
                 {showContextMenu && (
                     <div
                         className="absolute z-20 animate-bounce-in"
@@ -173,7 +200,11 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
         </div>
 
         {/* Right Panel: Canvas */}
-        <div className="flex-1 bg-[#FDFBF7] relative overflow-hidden" style={{ cursor: activeTool === 'pan' ? 'grab' : 'default' }}>
+        <div
+            ref={canvasRef}
+            className="flex-1 bg-[#FDFBF7] relative overflow-hidden"
+            style={{ cursor: activeTool === 'pan' ? 'grab' : 'default' }}
+        >
 
             {/* Processing Loader Overlay */}
             {isProcessing && <GenerationLoader step={processStep} />}
@@ -190,7 +221,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
 
             {/* Diagram Canvas Layer */}
             <div className="absolute inset-0 w-full h-full">
-                 <DiagramCanvas data={diagramData} />
+                 <DiagramCanvas data={diagramData} onNodeDrag={handleNodeDrag} />
             </div>
 
             {/* Floating Toolbar */}
@@ -216,8 +247,6 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
             </div>
         </div>
       </div>
-
-      {/* Extended Context Menu Popover (When bolt is NOT clicked directly, or could be a separate interaction) */}
 
       {showContextMenu && !isProcessing && (
         <div 
@@ -256,7 +285,11 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
       )}
 
       {/* Export Modal */}
-      <ExportModal isOpen={isExportModalOpen} onClose={() => setIsExportModalOpen(false)} />
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        targetRef={canvasRef} // Passing the ref to export modal
+      />
     </div>
   );
 };

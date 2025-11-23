@@ -1,21 +1,60 @@
 import React, { useState } from 'react';
 import { OrganicButton } from './OrganicButton';
+import { toPng, toSvg } from 'html-to-image';
+import download from 'downloadjs';
 
 interface ExportModalProps {
   isOpen: boolean;
   onClose: () => void;
+  targetRef: React.RefObject<HTMLElement>;
 }
 
 type Format = 'PNG' | 'SVG';
 
-export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose }) => {
+export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose, targetRef }) => {
   const [selectedFormat, setSelectedFormat] = useState<Format>('PNG');
+  const [isExporting, setIsExporting] = useState(false);
 
   if (!isOpen) return null;
 
-  const handleDownload = () => {
-    alert(`Descargando en formato ${selectedFormat}...`);
-    onClose();
+  const handleDownload = async () => {
+    if (!targetRef.current) {
+        alert("Error: No se encontró el lienzo para exportar.");
+        return;
+    }
+
+    setIsExporting(true);
+
+    try {
+        // Filter out UI elements that shouldn't be in the image (like toolbar)
+        const filter = (node: HTMLElement) => {
+            const exclusionClasses = ['z-20', 'shadow-xl']; // Heuristic to exclude floating toolbar if it has these classes
+            // Better approach: rely on specific class or ID if possible, but for now:
+            // If the node contains "pan_tool" icon, exclude it.
+            if (node.innerText && (node.innerText.includes('pan_tool') || node.innerText.includes('edit'))) {
+                // Check if it's a button
+                if (node.tagName === 'BUTTON' || node.parentElement?.tagName === 'BUTTON') return false;
+            }
+            return true;
+        };
+
+        if (selectedFormat === 'PNG') {
+            const dataUrl = await toPng(targetRef.current, { backgroundColor: '#FDFBF7' });
+            download(dataUrl, 'trazo-diagram.png');
+        } else {
+            // SVG export simulation (html-to-image produces SVG wrapped HTML, roughjs produces SVGs internally)
+            // For true SVG vector export we would need to extract the inner SVGs.
+            // But html-to-image toSvg gives an SVG image of the DOM.
+            const dataUrl = await toSvg(targetRef.current, { backgroundColor: '#FDFBF7' });
+            download(dataUrl, 'trazo-diagram.svg');
+        }
+        onClose();
+    } catch (error) {
+        console.error("Export failed", error);
+        alert("Hubo un error al exportar la imagen.");
+    } finally {
+        setIsExporting(false);
+    }
   };
 
   return (
@@ -47,14 +86,22 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose }) => 
                 onClick={() => setSelectedFormat('SVG')}
                 className={`relative flex flex-col items-center justify-center gap-3 p-4 border-2 rounded-lg transition-all focus:outline-none ${selectedFormat === 'SVG' ? 'border-primary bg-primary/5 ring-2 ring-primary' : 'border-gray-200 hover:border-primary hover:bg-primary/5'}`}
             >
-                <div className="absolute top-2 right-2 bg-primary text-[10px] font-bold px-1.5 rounded text-off-black">PRO</div>
                 <span className="material-symbols-outlined text-4xl">gesture</span>
                 <span className="text-sm font-bold">Vector (SVG)</span>
             </button>
         </div>
 
-        <OrganicButton className="w-full h-12 text-lg" onClick={handleDownload}>
-            Descargar
+        <OrganicButton
+            className="w-full h-12 text-lg flex items-center justify-center gap-2"
+            onClick={handleDownload}
+            disabled={isExporting}
+        >
+            {isExporting ? (
+                <>
+                    <span className="animate-spin material-symbols-outlined text-sm">progress_activity</span>
+                    Exportando...
+                </>
+            ) : 'Descargar'}
         </OrganicButton>
       </div>
     </div>
