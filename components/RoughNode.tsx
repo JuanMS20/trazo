@@ -8,12 +8,24 @@ import clsx from 'clsx';
 interface RoughNodeProps {
   node: DiagramNode;
   index: number;
+  scale?: number;
   onDrag: (id: string, x: number, y: number) => void;
   onNodeChange?: (id: string, updates: Partial<DiagramNode>) => void;
   onNodeSelect?: (id: string) => void;
+  onConnectionStart?: (nodeId: string, handle: 'top' | 'right' | 'bottom' | 'left') => void;
+  onConnectionEnd?: (nodeId: string) => void;
 }
 
-export const RoughNode: React.FC<RoughNodeProps> = ({ node, index, onDrag, onNodeChange, onNodeSelect }) => {
+export const RoughNode: React.FC<RoughNodeProps> = ({
+  node,
+  index,
+  scale = 1,
+  onDrag,
+  onNodeChange,
+  onNodeSelect,
+  onConnectionStart,
+  onConnectionEnd
+}) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const nodeRef = useRef(null);
   const [isEditing, setIsEditing] = useState(false);
@@ -94,6 +106,38 @@ export const RoughNode: React.FC<RoughNodeProps> = ({ node, index, onDrag, onNod
       }
   };
 
+  // Connection Handles
+  const renderHandles = () => {
+      if (isEditing || node.type === 'container') return null;
+
+      const handleClass = "absolute w-3 h-3 bg-blue-400 rounded-full border border-white opacity-0 group-hover:opacity-100 transition-opacity cursor-crosshair z-50";
+
+      return (
+        <>
+           {/* Top */}
+           <div
+             className={clsx(handleClass, "-top-1.5 left-1/2 -translate-x-1/2")}
+             onMouseDown={(e) => { e.stopPropagation(); onConnectionStart?.(node.id, 'top'); }}
+           />
+           {/* Right */}
+           <div
+             className={clsx(handleClass, "top-1/2 -right-1.5 -translate-y-1/2")}
+             onMouseDown={(e) => { e.stopPropagation(); onConnectionStart?.(node.id, 'right'); }}
+           />
+           {/* Bottom */}
+           <div
+             className={clsx(handleClass, "-bottom-1.5 left-1/2 -translate-x-1/2")}
+             onMouseDown={(e) => { e.stopPropagation(); onConnectionStart?.(node.id, 'bottom'); }}
+           />
+           {/* Left */}
+           <div
+             className={clsx(handleClass, "top-1/2 -left-1.5 -translate-y-1/2")}
+             onMouseDown={(e) => { e.stopPropagation(); onConnectionStart?.(node.id, 'left'); }}
+           />
+        </>
+      );
+  };
+
   // Determine container specific styles
   const isContainer = node.type === 'container';
 
@@ -105,6 +149,7 @@ export const RoughNode: React.FC<RoughNodeProps> = ({ node, index, onDrag, onNod
             onDrag(node.id, data.x + node.width / 2, data.y + node.height / 2);
         }}
         disabled={isEditing}
+        scale={scale}
     >
         <motion.div
         ref={nodeRef}
@@ -131,11 +176,14 @@ export const RoughNode: React.FC<RoughNodeProps> = ({ node, index, onDrag, onNod
             e.stopPropagation();
             onNodeSelect?.(node.id);
         }}
+        onMouseUp={() => onConnectionEnd?.(node.id)}
         >
         <svg
             ref={svgRef}
             className="absolute inset-0 w-full h-full pointer-events-none overflow-visible"
         />
+
+        {renderHandles()}
 
         {isEditing ? (
             <textarea
