@@ -13,3 +13,28 @@ export interface Note {
   isFavorite?: boolean;
   isDeleted?: boolean;
 }
+
+// Diagram Types
+export interface DiagramNode {
+  id: string;
+  text: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  type: 'rectangle' | 'circle' | 'ellipse' | 'diamond';
+  color?: string;
+}
+
+export interface DiagramEdge {
+  id: string;
+  fromId: string;
+  toId: string;
+  label?: string;
+}
+
+export interface DiagramData {
+  nodes: DiagramNode[];
+  edges: DiagramEdge[];
+  type: 'flowchart' | 'mindmap' | 'cycle' | 'hierarchy';
+}

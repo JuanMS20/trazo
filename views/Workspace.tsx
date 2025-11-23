@@ -1,6 +1,8 @@
 import React, { useState, useRef } from 'react';
-import { ViewState } from '../types';
+import { ViewState, DiagramData } from '../types';
 import { ExportModal } from '../components/ExportModal';
+import { DiagramCanvas } from '../components/DiagramCanvas';
+import { generateDiagramFromText } from '../utils/diagramGenerator';
 
 interface WorkspaceProps {
   onNavigate: (view: ViewState) => void;
@@ -14,11 +16,15 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
   const [contextMenuPosition, setContextMenuPosition] = useState({ top: 0, left: 0 });
   const [activeTool, setActiveTool] = useState<ToolType>('edit');
   const [zoomLevel, setZoomLevel] = useState(1);
-
-  const textRef = useRef<HTMLParagraphElement>(null);
+  const [diagramData, setDiagramData] = useState<DiagramData | null>(null);
+  const [selectedText, setSelectedText] = useState<string>('');
 
   // Simulate context menu trigger
   const handleTextClick = (e: React.MouseEvent) => {
+    const target = e.currentTarget as HTMLElement;
+    const text = target.innerText;
+    setSelectedText(text);
+
     // Toggle context menu for demonstration
     if (!showContextMenu) {
         // Position near the click, slightly offset
@@ -30,6 +36,14 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
     }
   };
 
+  const handleBoltClick = (e: React.MouseEvent) => {
+      e.stopPropagation();
+      // Generate a flowchart by default if bolt is clicked
+      const data = generateDiagramFromText(selectedText || "Una vez que entendemos el problema...", 'flowchart');
+      setDiagramData(data);
+      setShowContextMenu(false);
+  };
+
   const handleToolChange = (tool: ToolType) => {
     setActiveTool(tool);
     if (tool === 'zoom') {
@@ -39,7 +53,13 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
   };
 
   const handleContextOptionClick = (label: string) => {
-    alert(`Visualizando como ${label}...`);
+    let type: DiagramData['type'] = 'flowchart';
+    if (label === 'Mapa Mental') type = 'mindmap';
+    if (label === 'Ciclo') type = 'cycle';
+    if (label === 'Jerarquía') type = 'hierarchy';
+
+    const data = generateDiagramFromText(selectedText || "Texto de ejemplo", type);
+    setDiagramData(data);
     setShowContextMenu(false);
   };
 
@@ -70,7 +90,10 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
                 <h1 className="font-sans text-3xl font-bold text-off-black mb-6">Brainstorming Sesión</h1>
                 
                 <div className="font-serif text-lg leading-relaxed text-gray-700 space-y-6">
-                    <p>
+                    <p
+                        onClick={handleTextClick}
+                        className="cursor-pointer hover:bg-gray-50 p-1 -m-1 rounded transition-colors"
+                    >
                         El primer paso es definir claramente el problema que intentamos resolver. Sin una comprensión sólida del problema, cualquier solución será una conjetura.
                     </p>
 
@@ -88,7 +111,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
                         {/* Floating Bolt Button (Visible when "selected") */}
                         <div className={`absolute -right-12 top-1/2 -translate-y-1/2 transition-all duration-300 ${showContextMenu ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 pointer-events-none'}`}>
                             <button
-                                onClick={(e) => { e.stopPropagation(); alert('Quick action triggered!'); }}
+                                onClick={handleBoltClick}
                                 className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-off-black shadow-lg hover:scale-110 transition-transform"
                             >
                                 <span className="material-symbols-outlined">bolt</span>
@@ -96,7 +119,10 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
                         </div>
                     </div>
 
-                    <p>
+                    <p
+                        onClick={handleTextClick}
+                        className="cursor-pointer hover:bg-gray-50 p-1 -m-1 rounded transition-colors"
+                    >
                         Después de la fase de ideación, debemos evaluar las soluciones propuestas frente a un conjunto de criterios predefinidos.
                     </p>
                 </div>
@@ -107,7 +133,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
         <div className="flex-1 bg-[#FDFBF7] relative overflow-hidden" style={{ cursor: activeTool === 'pan' ? 'grab' : 'default' }}>
             {/* Dot Grid Background */}
             <div
-                className="absolute inset-0 transition-transform duration-200"
+                className="absolute inset-0 transition-transform duration-200 pointer-events-none"
                 style={{
                     backgroundImage: 'radial-gradient(#d1d5db 1px, transparent 1px)',
                     backgroundSize: '24px 24px',
@@ -115,8 +141,13 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
                 }}
             ></div>
 
+            {/* Diagram Canvas Layer */}
+            <div className="absolute inset-0 w-full h-full">
+                 <DiagramCanvas data={diagramData} />
+            </div>
+
             {/* Floating Toolbar */}
-            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-white border border-gray-200 shadow-xl rounded-[20px_20px_0_0] px-6 py-3 flex gap-6">
+            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-white border border-gray-200 shadow-xl rounded-[20px_20px_0_0] px-6 py-3 flex gap-6 z-20">
                 <button
                     onClick={() => handleToolChange('pan')}
                     className={`p-2 rounded-full transition-colors ${activeTool === 'pan' ? 'text-off-black bg-gray-100 ring-2 ring-gray-300' : 'text-gray-500 hover:text-off-black hover:bg-gray-100'}`}
