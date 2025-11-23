@@ -18,17 +18,6 @@ export const findOrthogonalPath = (
   nodes: DiagramNode[],
   padding: number = 20
 ): Point[] => {
-  // 1. Define bounding box for the search area
-  // We don't want to search the whole infinite canvas.
-  // We'll limit to the bounding box of start/end + padding,
-  // plus including any nodes that intersect this area?
-  // Simpler: Find bounds of all nodes + start/end to define the grid.
-
-  // Actually, for performance, let's just use a grid around the start/end
-  // with some margin. If the path needs to go way out, this simple approach fails,
-  // but for "Manhattan routing" in a diagram, it usually stays somewhat local.
-  // Let's include all nodes in the grid calculation to be safe, or at least
-  // nodes that are "in the way".
 
   let minX = Math.min(start.x, end.x);
   let maxX = Math.max(start.x, end.x);
@@ -36,9 +25,6 @@ export const findOrthogonalPath = (
   let maxY = Math.max(start.y, end.y);
 
   // Expand bounds to include relevant obstacles
-  // A simple heuristic: include all nodes, but clamp the grid size if it gets too huge?
-  // Let's start with a dynamic bounds based on all nodes + start/end.
-
   nodes.forEach(node => {
       minX = Math.min(minX, node.x - node.width/2 - padding);
       maxX = Math.max(maxX, node.x + node.width/2 + padding);
@@ -56,13 +42,14 @@ export const findOrthogonalPath = (
   const width = Math.ceil((maxX - minX) / GRID_SIZE);
   const height = Math.ceil((maxY - minY) / GRID_SIZE);
 
-  // Safety check to prevent massive memory usage
+  // Safety check
   if (width * height > 50000) {
-      // Fallback to direct line if grid is too massive (e.g. nodes very far apart)
       return [start, { x: start.x, y: end.y }, end];
   }
 
-  const grid = new Uint8Array(width * height); // 0 = empty, 1 = obstacle
+  // Cost Grid: 1 = normal, 100 = obstacle
+  const grid = new Uint16Array(width * height);
+  for(let i=0; i<grid.length; i++) grid[i] = 1;
 
   const toGrid = (p: Point): GridPoint => ({
       x: Math.floor((p.x - minX) / GRID_SIZE),
@@ -76,7 +63,7 @@ export const findOrthogonalPath = (
 
   // Mark obstacles
   nodes.forEach(node => {
-      if (node.type === 'container') return; // Don't route around containers usually
+      if (node.type === 'container') return;
 
       const left = node.x - node.width / 2 - padding;
       const right = node.x + node.width / 2 + padding;
@@ -86,7 +73,6 @@ export const findOrthogonalPath = (
       const gMin = toGrid({ x: left, y: top });
       const gMax = toGrid({ x: right, y: bottom });
 
-      // Clamp to grid bounds
       const x0 = Math.max(0, gMin.x);
       const y0 = Math.max(0, gMin.y);
       const x1 = Math.min(width - 1, gMax.x);
@@ -94,95 +80,21 @@ export const findOrthogonalPath = (
 
       for (let y = y0; y <= y1; y++) {
           for (let x = x0; x <= x1; x++) {
-              grid[y * width + x] = 1;
+              grid[y * width + x] = 100; // High cost for obstacles
           }
       }
   });
 
-  // 3. A* Algorithm
   const startGrid = toGrid(start);
   const endGrid = toGrid(end);
 
-  // Ensure start and end are walkable (sometimes they start inside the padding of the node)
+  // Clear start/end
   if (startGrid.x >= 0 && startGrid.x < width && startGrid.y >= 0 && startGrid.y < height)
-      grid[startGrid.y * width + startGrid.x] = 0;
+      grid[startGrid.y * width + startGrid.x] = 1;
   if (endGrid.x >= 0 && endGrid.x < width && endGrid.y >= 0 && endGrid.y < height)
-      grid[endGrid.y * width + endGrid.x] = 0;
+      grid[endGrid.y * width + endGrid.x] = 1;
 
-  const openSet: { pos: GridPoint, f: number, g: number, parent?: GridPoint }[] = [];
-  const closedSet = new Set<string>();
-
-  openSet.push({ pos: startGrid, f: 0, g: 0 });
-
-  const getKey = (p: GridPoint) => `${p.x},${p.y}`;
-
-  const heuristic = (a: GridPoint, b: GridPoint) => Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
-
-  let finalNode: { pos: GridPoint, parent?: GridPoint } | undefined = undefined;
-
-  // Directions: Up, Right, Down, Left
-  const dirs = [{x:0, y:-1}, {x:1, y:0}, {x:0, y:1}, {x:-1, y:0}];
-
-  while (openSet.length > 0) {
-      // Get lowest f
-      openSet.sort((a, b) => a.f - b.f);
-      const current = openSet.shift()!;
-
-      if (current.pos.x === endGrid.x && current.pos.y === endGrid.y) {
-          finalNode = current;
-          break;
-      }
-
-      closedSet.add(getKey(current.pos));
-
-      for (const dir of dirs) {
-          const neighborPos = { x: current.pos.x + dir.x, y: current.pos.y + dir.y };
-
-          if (neighborPos.x < 0 || neighborPos.x >= width || neighborPos.y < 0 || neighborPos.y >= height) continue;
-          if (grid[neighborPos.y * width + neighborPos.x] === 1) continue;
-          if (closedSet.has(getKey(neighborPos))) continue;
-
-          const gScore = current.g + 1; // Cost is 1 per step
-          const existing = openSet.find(n => n.pos.x === neighborPos.x && n.pos.y === neighborPos.y);
-
-          if (!existing || gScore < existing.g) {
-              const neighbor = existing || { pos: neighborPos, f: 0, g: 0 };
-              neighbor.g = gScore;
-              neighbor.f = gScore + heuristic(neighborPos, endGrid);
-              neighbor.parent = current.pos;
-
-              // Penalize turns to encourage straight lines?
-              // Current implementation doesn't track direction, but Manhattan distance heuristic naturally prefers straight-ish paths.
-              // We could add a "turn penalty" if we tracked incoming direction.
-
-              if (!existing) openSet.push(neighbor);
-          }
-      }
-  }
-
-  if (!finalNode) {
-      // No path found, return simple elbow
-      return [start, { x: start.x, y: end.y }, end];
-  }
-
-  // 4. Reconstruct path
-  const path: Point[] = [];
-  let curr: GridPoint | undefined = finalNode.pos;
-
-  // Reconstruct using a map for parents would be faster than searching the closed set logic
-  // (but here I used a linked object structure in 'finalNode' but only saved 'parent' coordinate...
-  // wait, my 'closedSet' just stores keys. 'openSet' nodes had parents.
-  // I need to trace back. 'finalNode' has 'parent'. But 'parent' is just a coordinate.
-  // I need to look up the node with that coordinate.
-  // Actually, I should have stored the 'node' reference in a map `cameFrom`.
-
-  // Let's Fix the reconstruction logic:
-  // I'll re-run a simplified reconstruction assuming I have a 'cameFrom' map.
-  // But since I didn't implement 'cameFrom', I'll just use the fact I have 'parent' in the object...
-  // Ah, 'finalNode' is just one object. The others are lost in 'closedSet' or popped from 'openSet'.
-  // I need to persist the closed set nodes or use a map.
-
-  // Retrying the loop structure with a map for path reconstruction
+  // A* with Map
   return findOrthogonalPathWithMap(startGrid, endGrid, width, height, grid, start, end, toWorld);
 };
 
@@ -191,7 +103,7 @@ const findOrthogonalPathWithMap = (
     endGrid: GridPoint,
     width: number,
     height: number,
-    grid: Uint8Array,
+    grid: Uint16Array,
     originalStart: Point,
     originalEnd: Point,
     toWorld: (g: GridPoint) => Point
@@ -208,29 +120,25 @@ const findOrthogonalPathWithMap = (
     fScore.set(getKey(startGrid), Math.abs(startGrid.x - endGrid.x) + Math.abs(startGrid.y - endGrid.y));
 
     while(openSet.length > 0) {
-         // Sort by F score
          openSet.sort((a, b) => (fScore.get(getKey(a)) || Infinity) - (fScore.get(getKey(b)) || Infinity));
          const current = openSet.shift()!;
 
          if (current.x === endGrid.x && current.y === endGrid.y) {
-             // Reconstruct
              const path: Point[] = [];
              path.push(originalEnd);
 
              let curr = current;
              while (cameFrom.has(getKey(curr))) {
                  const prev = cameFrom.get(getKey(curr))!;
-
-                 // Simplify: Only add points at turns?
-                 // Let's first get all grid points
                  path.unshift(toWorld(curr));
                  curr = prev;
              }
-             path.unshift(toWorld(startGrid)); // First grid center
-             path[0] = originalStart; // Replace with exact start
+             path.unshift(toWorld(startGrid));
+             path[0] = originalStart;
 
-             // Simplify Path (Remove collinear points)
-             return simplifyPath(path);
+             const simplified = simplifyPath(path);
+             // Apply smoothing (Fillet)
+             return smoothPath(simplified);
          }
 
          const dirs = [{x:0, y:-1}, {x:1, y:0}, {x:0, y:1}, {x:-1, y:0}];
@@ -239,9 +147,10 @@ const findOrthogonalPathWithMap = (
             const neighbor = { x: current.x + dir.x, y: current.y + dir.y };
 
             if (neighbor.x < 0 || neighbor.x >= width || neighbor.y < 0 || neighbor.y >= height) continue;
-            if (grid[neighbor.y * width + neighbor.x] === 1) continue;
 
-            const tentativeG = (gScore.get(getKey(current)) || 0) + 1;
+            // Cost calculation
+            const cellCost = grid[neighbor.y * width + neighbor.x];
+            const tentativeG = (gScore.get(getKey(current)) || 0) + cellCost;
 
             if (tentativeG < (gScore.get(getKey(neighbor)) || Infinity)) {
                 cameFrom.set(getKey(neighbor), current);
@@ -255,29 +164,104 @@ const findOrthogonalPathWithMap = (
          }
     }
 
-    // Fallback
     return [originalStart, {x: originalStart.x, y: originalEnd.y}, originalEnd];
 };
 
 const simplifyPath = (points: Point[]): Point[] => {
     if (points.length < 3) return points;
-
     const newPoints = [points[0]];
-
     for (let i = 1; i < points.length - 1; i++) {
         const prev = points[i-1];
         const curr = points[i];
         const next = points[i+1];
-
-        // Check if collinear (horizontal or vertical)
         const isHorizontal = Math.abs(prev.y - curr.y) < 0.1 && Math.abs(curr.y - next.y) < 0.1;
         const isVertical = Math.abs(prev.x - curr.x) < 0.1 && Math.abs(curr.x - next.x) < 0.1;
-
         if (!isHorizontal && !isVertical) {
             newPoints.push(curr);
         }
     }
-
     newPoints.push(points[points.length - 1]);
     return newPoints;
+};
+
+// Fillet (Round Corners) Logic
+export const smoothPath = (points: Point[], radius: number = 12): Point[] => {
+    if (points.length < 3) return points;
+
+    const smoothPoints: Point[] = [];
+    smoothPoints.push(points[0]);
+
+    for (let i = 1; i < points.length - 1; i++) {
+        const p1 = points[i-1];
+        const p2 = points[i];
+        const p3 = points[i+1];
+
+        // Vector 1 (p1 -> p2)
+        const v1 = { x: p2.x - p1.x, y: p2.y - p1.y };
+        const len1 = Math.sqrt(v1.x*v1.x + v1.y*v1.y);
+
+        // Vector 2 (p2 -> p3)
+        const v2 = { x: p3.x - p2.x, y: p3.y - p2.y };
+        const len2 = Math.sqrt(v2.x*v2.x + v2.y*v2.y);
+
+        // Clamped radius
+        const r = Math.min(radius, len1/2, len2/2);
+
+        // Start of curve (backed off from p2 towards p1)
+        const c1 = {
+            x: p2.x - (v1.x / len1) * r,
+            y: p2.y - (v1.y / len1) * r
+        };
+
+        // End of curve (advanced from p2 towards p3)
+        const c2 = {
+            x: p2.x + (v2.x / len2) * r,
+            y: p2.y + (v2.y / len2) * r
+        };
+
+        // We push a "Control Point" logic for RoughJS or SVG
+        // But here 'points' returns a polyline.
+        // For 'RoughEdge' to draw a curve, it needs a specific structure?
+        // RoughJS 'curve' takes points. 'linearPath' takes points.
+        // If I return points for a bezier, I need to know how 'RoughEdge' consumes them.
+
+        // Let's assume RoughEdge draws a path string or uses 'linearPath'.
+        // If I want real curves, I need to return a path format that RoughEdge understands,
+        // OR I return a dense list of points approximating the curve?
+        // OR I return "Command Points" (Start, Control, End).
+
+        // Looking at utils/geometry.ts, calculateEdgePath returns { points, type }.
+        // If type is 'orthogonal', it expects points.
+        // If I want curves, I should probably return type 'curved' but with multiple segments?
+        // RoughJS curve() fits a curve through points.
+
+        // To keep it simple and compatible with typical polyline renderers:
+        // I will return the corner points: Start, CurveStart, Control(p2), CurveEnd, End
+        // And let the renderer handle it?
+        // RoughEdge probably uses 'linearPath' for orthogonal.
+
+        // Option A: Subdivide the bezier into small lines.
+        // Option B: Change the return type structure to support Bezier commands.
+
+        // Let's go with Option A (Subdivision) for "sketchy" look and compatibility.
+        // It's robust.
+
+        // Add start of curve
+        smoothPoints.push(c1);
+
+        // Subdivide Quad Bezier (c1 -> p2 -> c2)
+        const steps = 5;
+        for (let t = 1; t <= steps; t++) {
+             const k = t / (steps + 1);
+             const x = (1-k)*(1-k)*c1.x + 2*(1-k)*k*p2.x + k*k*c2.x;
+             const y = (1-k)*(1-k)*c1.y + 2*(1-k)*k*p2.y + k*k*c2.y;
+             smoothPoints.push({x, y});
+        }
+
+        // Add end of curve
+        smoothPoints.push(c2);
+    }
+
+    smoothPoints.push(points[points.length - 1]);
+    return smoothPoints;
 };

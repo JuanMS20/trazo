@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import Draggable from 'react-draggable';
 import { DiagramNode } from '../types';
 import clsx from 'clsx';
+import { getIconPath } from '../utils/iconLibrary';
 
 interface RoughNodeProps {
   node: DiagramNode;
@@ -56,15 +57,16 @@ export const RoughNode: React.FC<RoughNodeProps> = ({
                onNodeChange(node.id, { width: newWidth, height: newHeight });
           }
       }
-  }, [localText, node.variant, node.width, node.height]);
+  }, [localText, node.variant, node.width, node.height, node.icon]);
 
   useEffect(() => {
     if (svgRef.current) {
-      const rc = rough.svg(svgRef.current);
       // Clear previous content
       while (svgRef.current.firstChild) {
         svgRef.current.removeChild(svgRef.current.firstChild);
       }
+
+      const rc = rough.svg(svgRef.current);
 
       // Visual options
       const options: any = {
@@ -88,24 +90,81 @@ export const RoughNode: React.FC<RoughNodeProps> = ({
 
       const w = node.width;
       const h = node.height;
+      let shapeNode: SVGElement | null = null;
 
-      // Handle Node Types
+      // Draw Shape
       if (node.type === 'container') {
-          // Container: Dashed, transparent, light stroke
           options.fill = 'transparent';
-          options.fillStyle = 'solid'; // No hatch
+          options.fillStyle = 'solid';
           options.strokeLineDash = [5, 5];
-          options.stroke = '#94a3b8'; // lighter grey
+          options.stroke = '#94a3b8';
           options.strokeWidth = 2;
-          rc.rectangle(2, 2, w - 4, h - 4, options);
+          shapeNode = rc.rectangle(2, 2, w - 4, h - 4, options);
       } else if (node.type === 'circle' || node.type === 'ellipse') {
-          rc.ellipse(w / 2, h / 2, w - 4, h - 4, options);
+          shapeNode = rc.ellipse(w / 2, h / 2, w - 4, h - 4, options);
       } else if (node.type === 'diamond') {
-          // RoughJS has polygon, but no direct diamond primitive, simulate with polygon
-          rc.polygon([[w/2, 2], [w-2, h/2], [w/2, h-2], [2, h/2]], options);
+          shapeNode = rc.polygon([[w/2, 2], [w-2, h/2], [w/2, h-2], [2, h/2]], options);
+      } else if (node.type === 'cylinder') {
+          // Draw Cylinder parts and append them individually
+          const ry = 10;
+
+          // Body (Rectangle)
+          const body = rc.rectangle(2, ry + 2, w - 4, h - 2 * ry - 4, { ...options, stroke: 'none' });
+          svgRef.current.appendChild(body);
+
+          // Left Line
+          const leftLine = rc.line(2, ry + 2, 2, h - ry - 2, options);
+          svgRef.current.appendChild(leftLine);
+
+          // Right Line
+          const rightLine = rc.line(w - 2, ry + 2, w - 2, h - ry - 2, options);
+          svgRef.current.appendChild(rightLine);
+
+          // Bottom Ellipse
+          const bottomEllipse = rc.ellipse(w / 2, h - ry - 2, w - 4, ry * 2, options);
+          svgRef.current.appendChild(bottomEllipse);
+
+          // Top Ellipse
+          const topEllipse = rc.ellipse(w / 2, ry + 2, w - 4, ry * 2, options);
+          svgRef.current.appendChild(topEllipse);
+
+          // Since we appended manually, we don't set shapeNode here to avoid double append
+          shapeNode = null;
+
       } else {
           // Default rectangle
-          rc.rectangle(2, 2, w - 4, h - 4, options);
+          shapeNode = rc.rectangle(2, 2, w - 4, h - 4, options);
+      }
+
+      if (shapeNode) {
+          svgRef.current.appendChild(shapeNode);
+      }
+
+      // Draw Icon if present
+      if (node.icon) {
+          const iconPath = getIconPath(node.icon);
+          if (iconPath) {
+              const iconSize = 24;
+              const scaleFactor = 2.5;
+              const scaledSize = iconSize * scaleFactor;
+
+              const tx = (w - scaledSize) / 2;
+              const ty = (h - scaledSize) / 2 - 10;
+
+              const iconNode = rc.path(iconPath, {
+                  ...options,
+                  stroke: '#1e293b',
+                  fill: node.color === '#ffffff' ? '#e2e8f0' : '#ffffff',
+                  fillStyle: 'solid',
+                  roughness: 0.5,
+                  bowing: 0.2,
+                  strokeWidth: 1
+              });
+
+              // Apply transform to the generated path node
+              iconNode.setAttribute("transform", `translate(${tx}, ${ty}) scale(${scaleFactor})`);
+              svgRef.current.appendChild(iconNode);
+          }
       }
     }
   }, [node]);
@@ -190,12 +249,11 @@ export const RoughNode: React.FC<RoughNodeProps> = ({
         className={clsx(
             "absolute p-4 cursor-grab active:cursor-grabbing group",
             isContainer ? "flex items-start justify-start" : "flex flex-col items-center justify-center text-center",
-            // Lower z-index for container visually (handled by parent usually, but we can try here)
         )}
         style={{
             width: node.width,
             height: node.height,
-            zIndex: isContainer ? 0 : 10 // Ensure containers stay behind
+            zIndex: isContainer ? 0 : 10
         }}
         onDoubleClick={handleDoubleClick}
         onClick={(e) => {
@@ -231,7 +289,9 @@ export const RoughNode: React.FC<RoughNodeProps> = ({
             <textarea
                 className={clsx(
                     "relative z-20 bg-transparent border-none outline-none font-caveat font-bold resize-none overflow-hidden leading-tight",
-                    isContainer ? "text-left w-full h-8 text-gray-500" : "text-center w-full h-full text-lg"
+                    isContainer ? "text-left w-full h-8 text-gray-500" : "text-center w-full h-full text-lg",
+                    // If icon is present, push text down?
+                    node.icon && "mt-12"
                 )}
                 value={localText}
                 onChange={(e) => setLocalText(e.target.value)}
@@ -241,8 +301,7 @@ export const RoughNode: React.FC<RoughNodeProps> = ({
                 style={{ fontSize: 'inherit' }}
             />
         ) : node.variant === 'infographic' ? (
-            // Infographic Content Layout
-            <div className="relative z-10 flex flex-col items-center gap-2 pointer-events-none select-none">
+             <div className="relative z-10 flex flex-col items-center gap-2 pointer-events-none select-none">
                  {node.label && node.label !== 'Main' && (
                      <span className="font-display text-4xl font-bold text-off-black/20 absolute -top-2 right-4">
                          {node.label}
@@ -264,19 +323,14 @@ export const RoughNode: React.FC<RoughNodeProps> = ({
             </div>
         ) : (
             // Standard Content Layout
-            <>
-                {node.icon && (
-                    <span className="relative z-10 material-symbols-outlined text-3xl mb-1 text-off-black/80 pointer-events-none select-none">
-                        {node.icon}
-                    </span>
-                )}
+            <div className={clsx("relative z-10 flex flex-col items-center", node.icon && "mt-12")}>
                 <span className={clsx(
-                    "relative z-10 font-caveat font-bold leading-tight pointer-events-none select-none text-off-black",
+                    "font-caveat font-bold leading-tight pointer-events-none select-none text-off-black",
                     isContainer ? "text-sm text-gray-500 uppercase tracking-wider" : "text-lg"
                 )}>
                     {node.text}
                 </span>
-            </>
+            </div>
         )}
         </motion.div>
     </Draggable>

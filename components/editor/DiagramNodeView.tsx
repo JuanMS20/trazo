@@ -6,6 +6,7 @@ import * as htmlToImage from 'html-to-image';
 import download from 'downloadjs';
 import { generateSvgString } from '../../utils/svgGenerator';
 import { v4 as uuidv4 } from 'uuid';
+import { NodeToolbar } from './NodeToolbar';
 
 export const DiagramNodeView: React.FC<NodeViewProps> = ({ node, updateAttributes, selected }) => {
   const data = node.attrs.data as DiagramData | null;
@@ -31,25 +32,13 @@ export const DiagramNodeView: React.FC<NodeViewProps> = ({ node, updateAttribute
   const handleNodeChange = (id: string, updates: Partial<DiagramNode>) => {
       if (!data) return;
       const updatedNodes = data.nodes.map(n => n.id === id ? { ...n, ...updates } : n);
-
-      // Debouncing updates if needed.
-      // Text updates are already onBlur.
-      // Auto-resize happens occasionally.
-      // To be safe, we can check if it's a size update and if the change is small, maybe ignore?
-      // But RoughNode already checks > 5px.
-
       updateAttributes({
           data: { ...data, nodes: updatedNodes }
       });
   };
 
   const handleNodesForceUpdate = (nodes: DiagramNode[]) => {
-      // This comes from physics simulation settling
       if (!data) return;
-
-      // We only update if positions are different significantly?
-      // Or just trust the caller (DiagramCanvas onEnd).
-
       updateAttributes({
           data: { ...data, nodes }
       });
@@ -59,20 +48,14 @@ export const DiagramNodeView: React.FC<NodeViewProps> = ({ node, updateAttribute
       setSelectedNodeId(id);
   };
 
-  const handleColorChange = (color: string) => {
+  const handleToolbarChange = (updates: Partial<DiagramNode>) => {
       if (!selectedNodeId || !data) return;
-      handleNodeChange(selectedNodeId, { color });
-      setSelectedNodeId(null); // Close menu after selection
+      handleNodeChange(selectedNodeId, updates);
+      // Keep selected? Yes.
   };
 
   const handleNodeDrag = (id: string, x: number, y: number) => {
     if (!data) return;
-
-    // We used to update here, but DiagramCanvas now handles local state.
-    // However, DiagramCanvas calls this when drag stops?
-    // Let's assume DiagramCanvas calls this onDragEnd.
-    // Wait, DiagramCanvas uses react-draggable onStop -> onNodeDrag.
-    // So this IS the commit.
 
     const updatedNodes = data.nodes.map(n =>
         n.id === id ? { ...n, x, y } : n
@@ -104,9 +87,6 @@ export const DiagramNodeView: React.FC<NodeViewProps> = ({ node, updateAttribute
   const handleExport = async (format: 'png' | 'svg') => {
       if (!containerRef.current) return;
 
-      // Find the inner canvas container to export
-      // DiagramCanvas renders a div with ref=containerRef, but we wrap it.
-      // We want to capture the content.
       const element = containerRef.current.querySelector('.relative.w-full.h-full') as HTMLElement;
       if (!element) return;
 
@@ -130,6 +110,9 @@ export const DiagramNodeView: React.FC<NodeViewProps> = ({ node, updateAttribute
 
   if (!data) return <NodeViewWrapper>Empty Diagram</NodeViewWrapper>;
 
+  // Find selected node
+  const selectedNode = selectedNodeId ? data.nodes.find(n => n.id === selectedNodeId) : null;
+
   return (
     <NodeViewWrapper
         className="diagram-node-view my-8 w-full relative group transition-all duration-200"
@@ -152,30 +135,23 @@ export const DiagramNodeView: React.FC<NodeViewProps> = ({ node, updateAttribute
             onNodesForceUpdate={handleNodesForceUpdate}
         />
 
-        {/* Color Picker Menu */}
-        {selectedNodeId && (
+        {/* New Advanced Toolbar */}
+        {selectedNode && (
             <div
-                className="absolute bg-white rounded-full shadow-lg border border-gray-200 p-1.5 flex gap-2 z-50 animate-in fade-in zoom-in-95 duration-100"
+                className="absolute"
                 style={{
-                    // Position relative to selected node?
-                    // Hard to get screen coords here easily without ref forwarding galore.
-                    // Let's position it central top or top-left of the canvas for now, or near the mouse?
-                    // Actually, let's just center it at the top of the canvas for simplicity and reliability
                     top: 16,
                     left: '50%',
-                    transform: 'translateX(-50%)'
+                    transform: 'translateX(-50%)',
+                    zIndex: 100
                 }}
                 onClick={(e) => e.stopPropagation()}
             >
-                {['#ffffff', '#fef08a', '#bae6fd', '#fecaca'].map(c => (
-                    <button
-                        key={c}
-                        onClick={() => handleColorChange(c)}
-                        className="w-6 h-6 rounded-full border border-gray-300 hover:scale-110 transition-transform"
-                        style={{ backgroundColor: c }}
-                        title={c}
-                    />
-                ))}
+                <NodeToolbar
+                    node={selectedNode}
+                    onChange={handleToolbarChange}
+                    onClose={() => setSelectedNodeId(null)}
+                />
             </div>
         )}
 

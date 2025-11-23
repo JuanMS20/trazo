@@ -37,16 +37,11 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const simulationRef = useRef<any>(null);
 
-  // Local state for nodes to allow smooth physics updates without committing every tick
   const [localNodes, setLocalNodes] = useState<DiagramNode[]>([]);
+  const [snapLines, setSnapLines] = useState<{ x?: number, y?: number }>({});
 
   useEffect(() => {
     if (data?.nodes) {
-        // Only update local nodes if the IDs or count changed significantly,
-        // OR if it's a fresh load.
-        // We want to avoid overwriting local physics state with "stale" props
-        // unless the props are definitely newer (e.g. undo/redo).
-        // For now, let's sync.
         setLocalNodes(data.nodes);
     }
   }, [data?.nodes]);
@@ -55,70 +50,49 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
   useEffect(() => {
     if (!localNodes.length) return;
 
-    // We only want to run simulation if we need to resolve overlaps
-    // But keeping it alive allows "magic" feel.
-    // However, we must be careful not to fight with user dragging.
-
-    const nodes = localNodes.map(n => ({ ...n })); // Copy for d3 mutation
+    const nodes = localNodes.map(n => ({ ...n }));
 
     const simulation = d3.forceSimulation(nodes as any)
         .force("collide", d3.forceCollide().radius((d: any) => Math.max(d.width, d.height) / 2 + 10).strength(0.5).iterations(2))
         .force("charge", d3.forceManyBody().strength(-100))
         .alphaDecay(0.1)
-        .stop(); // Start stopped, tick manually or on event
+        .stop();
 
     simulationRef.current = simulation;
-
-    // We can define a function to "poke" the simulation
 
     return () => {
         simulation.stop();
     };
-  }, []); // Run once on mount? Or recreate when nodes change?
-  // Recreating is safer for adding/removing nodes.
+  }, []);
 
-  // Re-run simulation when nodes change size or count
   useEffect(() => {
       if (!simulationRef.current || !data?.nodes) return;
 
       const simulation = simulationRef.current;
       const currentNodes = localNodes;
 
-      // Update nodes in simulation
       simulation.nodes(currentNodes);
-
-      // Warm up / Tick
       simulation.alpha(0.3).restart();
 
       simulation.on("tick", () => {
-          // Update local state with new positions
-          // We need to be careful about React render cycle loop.
-          // Maybe just use a ref for positions and force update?
-          // Or throttle state updates.
-
           setLocalNodes(prev => prev.map(n => {
               const d3Node = currentNodes.find(dn => dn.id === n.id) as any;
-              if (d3Node && (Math.abs(d3Node.x - n.x) > 1 || Math.abs(d3Node.y - n.y) > 1)) {
+              // Only update if not currently being dragged/fixed?
+              // Ideally d3Node.fx is set if dragged.
+              if (d3Node && (d3Node.fx == null) && (d3Node.fy == null) && (Math.abs(d3Node.x - n.x) > 1 || Math.abs(d3Node.y - n.y) > 1)) {
                   return { ...n, x: d3Node.x, y: d3Node.y };
               }
               return n;
           }));
-
-          // If we want to persist to Tiptap eventually, we do it after simulation settles (onEnd)
       });
 
       simulation.on("end", () => {
-          // Sync back to parent if changed?
           if (onNodesForceUpdate) {
               onNodesForceUpdate(currentNodes);
           }
       });
 
-  }, [data?.nodes.length]); // Only full restart on node count change?
-  // What about size change?
-  // If a node resizes, we want to kick the simulation.
-
-  // Actually, 'localNodes' shouldn't be in the dependency array of the effect that sets it.
+  }, [data?.nodes.length]);
 
   const [connectionState, setConnectionState] = useState<{
       isConnecting: boolean;
@@ -141,7 +115,7 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
           isConnecting: true,
           fromId: nodeId,
           mousePos: { x: node.x, y: node.y },
-          startNodeCenter: { x: node.x, y: node.y } // Simplified start point
+          startNodeCenter: { x: node.x, y: node.y }
       });
   };
 
@@ -154,10 +128,6 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
 
   const handleMouseMove = (e: React.MouseEvent, scale: number, positionX: number, positionY: number) => {
       if (!connectionState.isConnecting) return;
-
-      // Transform mouse coordinates to canvas coordinates
-      // e.clientX/Y are screen coords.
-      // We need relative to container.
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
       const x = (e.clientX - rect.left - positionX) / scale;
@@ -172,6 +142,93 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
   const handleMouseUp = () => {
       if (connectionState.isConnecting) {
            setConnectionState({ isConnecting: false, fromId: null, mousePos: { x: 0, y: 0 }, startNodeCenter: { x: 0, y: 0 } });
+      }
+  };
+
+  // Snapping Logic
+  const handleNodeDrag = (id: string, x: number, y: number) => {
+      const THRESHOLD = 5;
+      let newX = x;
+      let newY = y;
+      let snapX: number | undefined;
+      let snapY: number | undefined;
+
+      const draggingNode = localNodes.find(n => n.id === id);
+      if (!draggingNode) return;
+
+      // Check alignment with other nodes
+      localNodes.forEach(other => {
+          if (other.id === id) return;
+
+          // Center-to-Center X
+          if (Math.abs(other.x - x) < THRESHOLD) {
+              newX = other.x;
+              snapX = other.x;
+          }
+          // Center-to-Center Y
+          if (Math.abs(other.y - y) < THRESHOLD) {
+              newY = other.y;
+              snapY = other.y;
+          }
+
+          // Edge alignment?
+          // Left align: (x - w/2) vs (other.x - other.w/2)
+          // For simplicity, sticking to Center alignment as per primary requirement ("alinee con los centros").
+          // The prompt says "centros o bordes". Let's add simple edge check if center didn't snap.
+
+          if (snapX === undefined) {
+              const left = x - draggingNode.width/2;
+              const right = x + draggingNode.width/2;
+              const otherLeft = other.x - other.width/2;
+              const otherRight = other.x + other.width/2;
+
+              if (Math.abs(left - otherLeft) < THRESHOLD) { newX = otherLeft + draggingNode.width/2; snapX = otherLeft; }
+              else if (Math.abs(left - otherRight) < THRESHOLD) { newX = otherRight + draggingNode.width/2; snapX = otherRight; }
+              else if (Math.abs(right - otherRight) < THRESHOLD) { newX = otherRight - draggingNode.width/2; snapX = otherRight; }
+              else if (Math.abs(right - otherLeft) < THRESHOLD) { newX = otherLeft - draggingNode.width/2; snapX = otherLeft; }
+          }
+
+           if (snapY === undefined) {
+              const top = y - draggingNode.height/2;
+              const bottom = y + draggingNode.height/2;
+              const otherTop = other.y - other.height/2;
+              const otherBottom = other.y + other.height/2;
+
+              if (Math.abs(top - otherTop) < THRESHOLD) { newY = otherTop + draggingNode.height/2; snapY = otherTop; }
+              else if (Math.abs(top - otherBottom) < THRESHOLD) { newY = otherBottom + draggingNode.height/2; snapY = otherBottom; }
+              else if (Math.abs(bottom - otherBottom) < THRESHOLD) { newY = otherBottom - draggingNode.height/2; snapY = otherBottom; }
+              else if (Math.abs(bottom - otherTop) < THRESHOLD) { newY = otherTop - draggingNode.height/2; snapY = otherTop; }
+          }
+      });
+
+      setSnapLines({ x: snapX, y: snapY });
+
+      // Update local state immediately
+      setLocalNodes(prev => prev.map(n => n.id === id ? { ...n, x: newX, y: newY } : n));
+
+      // Override Physics
+      if (simulationRef.current) {
+          const simNode = simulationRef.current.nodes().find((n: any) => n.id === id);
+          if (simNode) {
+              simNode.fx = newX;
+              simNode.fy = newY;
+          }
+          simulationRef.current.alpha(0.1).restart();
+      }
+  };
+
+  const handleNodeDragStop = (id: string, x: number, y: number) => {
+      setSnapLines({});
+      onNodeDrag(id, x, y); // Commit to parent
+
+      // Release Physics
+      if (simulationRef.current) {
+          const simNode = simulationRef.current.nodes().find((n: any) => n.id === id);
+          if (simNode) {
+              simNode.fx = null;
+              simNode.fy = null;
+          }
+          simulationRef.current.alpha(0.3).restart();
       }
   };
 
@@ -196,10 +253,9 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
         maxScale={4}
         limitToBounds={false}
         wheel={{ step: 0.1 }}
-        panning={{ velocityDisabled: true, disabled: connectionState.isConnecting }} // Disable pan when connecting
+        panning={{ velocityDisabled: true, disabled: connectionState.isConnecting }}
       >
         {({ state }) => {
-            // Ensure state exists before accessing properties
             const scale = state ? state.scale : 1;
             const positionX = state ? state.positionX : 0;
             const positionY = state ? state.positionY : 0;
@@ -216,10 +272,24 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
                     contentClass="w-full h-full"
                     contentStyle={{ width: '100%', height: '100%' }}
                 >
+                    {/* Snap Lines */}
+                    {snapLines.x !== undefined && (
+                        <div
+                            className="absolute top-0 bottom-0 border-l border-cyan-500 border-dashed z-0 pointer-events-none"
+                            style={{ left: snapLines.x, width: 1, height: '100%' }}
+                        />
+                    )}
+                    {snapLines.y !== undefined && (
+                        <div
+                            className="absolute left-0 right-0 border-t border-cyan-500 border-dashed z-0 pointer-events-none"
+                            style={{ top: snapLines.y, height: 1, width: '100%' }}
+                        />
+                    )}
+
                     {/* Edges */}
                     {data.edges.map((edge, i) => {
-                        const fromNode = data.nodes.find(n => n.id === edge.fromId);
-                        const toNode = data.nodes.find(n => n.id === edge.toId);
+                        const fromNode = localNodes.find(n => n.id === edge.fromId) || data.nodes.find(n => n.id === edge.fromId);
+                        const toNode = localNodes.find(n => n.id === edge.toId) || data.nodes.find(n => n.id === edge.toId);
 
                         if (!fromNode || !toNode) return null;
 
@@ -229,13 +299,13 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
                                 edge={edge}
                                 fromNode={fromNode}
                                 toNode={toNode}
-                                allNodes={data.nodes}
+                                allNodes={localNodes} // Use local nodes for routing to update in real-time
                                 index={i}
                             />
                         );
                     })}
 
-                    {/* Temporary Connection Line */}
+                    {/* Temporary Connection */}
                     {connectionState.isConnecting && (
                         <svg className="absolute top-0 left-0 w-full h-full pointer-events-none overflow-visible" style={{ zIndex: 100 }}>
                             <line
@@ -250,53 +320,21 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
                         </svg>
                     )}
 
-                    {/* Nodes - Use localNodes for rendering to show physics */}
+                    {/* Nodes */}
                     {(localNodes.length > 0 ? localNodes : data.nodes).map((node, i) => (
                         <RoughNode
                             key={node.id}
                             node={node}
                             index={i}
                             scale={scale}
-                            onDrag={(id, x, y) => {
-                                // Update local state immediately (Visual)
-                                setLocalNodes(prev => prev.map(n => n.id === id ? { ...n, x, y } : n));
-
-                                // Kick simulation to move others away while dragging?
-                                if (simulationRef.current) {
-                                    const simNode = simulationRef.current.nodes().find((n: any) => n.id === id);
-                                    if (simNode) {
-                                        simNode.fx = x; // Fix position while dragging
-                                        simNode.fy = y;
-                                    }
-                                    simulationRef.current.alpha(0.1).restart();
-                                }
-                            }}
-                            onDragStop={(id, x, y) => {
-                                // Commit final position to Tiptap History
-                                onNodeDrag(id, x, y);
-
-                                // Release fixed position in simulation
-                                if (simulationRef.current) {
-                                    const simNode = simulationRef.current.nodes().find((n: any) => n.id === id);
-                                    if (simNode) {
-                                        simNode.fx = null;
-                                        simNode.fy = null;
-                                    }
-                                    // Let it settle
-                                    simulationRef.current.alpha(0.3).restart();
-                                }
-                            }}
+                            onDrag={handleNodeDrag}
+                            onDragStop={handleNodeDragStop}
                             onNodeChange={(id, updates) => {
-                                // Update local state
                                 setLocalNodes(prev => prev.map(n => n.id === id ? { ...n, ...updates } : n));
-
-                                // Propagate to parent
                                 onNodeChange?.(id, updates);
-
-                                // Kick physics if size changed
                                 if (updates.width || updates.height) {
                                     if (simulationRef.current) {
-                                        simulationRef.current.nodes(localNodes); // Refresh data
+                                        simulationRef.current.nodes(localNodes);
                                         simulationRef.current.alpha(0.3).restart();
                                     }
                                 }
