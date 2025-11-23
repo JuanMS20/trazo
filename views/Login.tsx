@@ -50,8 +50,8 @@ export const Login: React.FC<LoginProps> = ({ onNavigate }) => {
       </div>
 
       <div className="absolute bottom-8 flex gap-6 text-sm font-bold text-gray-500">
-        <button className="hover:text-off-black transition-colors">Terms of Service</button>
-        <button className="hover:text-off-black transition-colors">Privacy Policy</button>
+        <button onClick={() => alert('Abriendo Términos de Servicio...')} className="hover:text-off-black transition-colors">Terms of Service</button>
+        <button onClick={() => alert('Abriendo Política de Privacidad...')} className="hover:text-off-black transition-colors">Privacy Policy</button>
       </div>
     </div>
   );

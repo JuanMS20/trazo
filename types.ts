@@ -10,4 +10,6 @@ export interface Note {
   title: string;
   type: 'Diagram' | 'Text' | 'List' | 'Flowchart';
   icon: string;
+  isFavorite?: boolean;
+  isDeleted?: boolean;
 }
