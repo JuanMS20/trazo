@@ -19,17 +19,20 @@ export const RoughNode: React.FC<RoughNodeProps> = ({ node, index }) => {
         svgRef.current.removeChild(svgRef.current.firstChild);
       }
 
+      // Enhanced options for sketchier look
       const options = {
-        roughness: 1.5,
-        bowing: 1.5,
+        roughness: 2.5, // More shaky
+        bowing: 2, // More curved lines
         fill: node.color || 'white',
-        fillStyle: 'solid', // or 'hachure' for sketchier look
+        fillStyle: 'hachure', // Sketchy fill
+        fillWeight: 1, // Thinner fill lines
+        hachureGap: 4, // Spaced out fill
         stroke: '#1e293b',
-        strokeWidth: 2
+        strokeWidth: 2,
+        disableMultiStroke: false // Double lines for extra sketchiness
       };
 
       let shape;
-      const padding = 10; // Internal padding for drawing
       const w = node.width;
       const h = node.height;
 
@@ -55,14 +58,26 @@ export const RoughNode: React.FC<RoughNodeProps> = ({ node, index }) => {
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.5, y: 20 }}
-      animate={{ opacity: 1, scale: 1, y: 0 }}
+      animate={{
+          opacity: 1,
+          scale: 1,
+          y: 0,
+          // Subtle wobble animation
+          rotate: [0, -1, 1, -0.5, 0.5, 0],
+      }}
       transition={{
         type: 'spring',
         stiffness: 260,
         damping: 20,
-        delay: index * 0.1
+        delay: index * 0.1,
+        rotate: {
+             duration: 5,
+             repeat: Infinity,
+             repeatType: "reverse",
+             ease: "easeInOut"
+        }
       }}
-      className="absolute flex items-center justify-center text-center p-2"
+      className="absolute flex flex-col items-center justify-center text-center p-2"
       style={{
         left: node.x - node.width / 2,
         top: node.y - node.height / 2,
@@ -74,7 +89,16 @@ export const RoughNode: React.FC<RoughNodeProps> = ({ node, index }) => {
         ref={svgRef}
         className="absolute inset-0 w-full h-full pointer-events-none overflow-visible"
       />
-      <span className="relative z-10 text-sm font-handwritten leading-tight pointer-events-none select-none">
+
+      {/* Icon rendering */}
+      {node.icon && (
+          <span className="relative z-10 material-symbols-outlined text-3xl mb-1 text-off-black/80">
+              {node.icon}
+          </span>
+      )}
+
+      {/* Use 'font-caveat' for handwritten look */}
+      <span className="relative z-10 text-lg font-caveat font-bold leading-tight pointer-events-none select-none text-off-black">
         {node.text}
       </span>
     </motion.div>
