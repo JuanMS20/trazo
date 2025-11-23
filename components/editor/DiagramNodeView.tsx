@@ -31,8 +31,27 @@ export const DiagramNodeView: React.FC<NodeViewProps> = ({ node, updateAttribute
   const handleNodeChange = (id: string, updates: Partial<DiagramNode>) => {
       if (!data) return;
       const updatedNodes = data.nodes.map(n => n.id === id ? { ...n, ...updates } : n);
+
+      // Debouncing updates if needed.
+      // Text updates are already onBlur.
+      // Auto-resize happens occasionally.
+      // To be safe, we can check if it's a size update and if the change is small, maybe ignore?
+      // But RoughNode already checks > 5px.
+
       updateAttributes({
           data: { ...data, nodes: updatedNodes }
+      });
+  };
+
+  const handleNodesForceUpdate = (nodes: DiagramNode[]) => {
+      // This comes from physics simulation settling
+      if (!data) return;
+
+      // We only update if positions are different significantly?
+      // Or just trust the caller (DiagramCanvas onEnd).
+
+      updateAttributes({
+          data: { ...data, nodes }
       });
   };
 
@@ -48,6 +67,12 @@ export const DiagramNodeView: React.FC<NodeViewProps> = ({ node, updateAttribute
 
   const handleNodeDrag = (id: string, x: number, y: number) => {
     if (!data) return;
+
+    // We used to update here, but DiagramCanvas now handles local state.
+    // However, DiagramCanvas calls this when drag stops?
+    // Let's assume DiagramCanvas calls this onDragEnd.
+    // Wait, DiagramCanvas uses react-draggable onStop -> onNodeDrag.
+    // So this IS the commit.
 
     const updatedNodes = data.nodes.map(n =>
         n.id === id ? { ...n, x, y } : n
@@ -124,6 +149,7 @@ export const DiagramNodeView: React.FC<NodeViewProps> = ({ node, updateAttribute
             onNodeChange={handleNodeChange}
             onNodeSelect={handleNodeSelect}
             onEdgeCreate={handleEdgeCreate}
+            onNodesForceUpdate={handleNodesForceUpdate}
         />
 
         {/* Color Picker Menu */}

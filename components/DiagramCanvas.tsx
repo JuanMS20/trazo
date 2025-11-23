@@ -1,8 +1,9 @@
-import React, { useRef, useEffect, useState } from 'react';
+import React, { useRef, useEffect, useState, useMemo } from 'react';
 import { DiagramData, DiagramNode } from '../types';
 import { RoughNode } from './RoughNode';
 import { RoughEdge } from './RoughEdge';
 import { TransformWrapper, TransformComponent, useControls } from 'react-zoom-pan-pinch';
+import * as d3 from 'd3-force';
 import { v4 as uuidv4 } from 'uuid';
 
 interface DiagramCanvasProps {
@@ -11,6 +12,7 @@ interface DiagramCanvasProps {
   onNodeChange?: (id: string, updates: Partial<DiagramNode>) => void;
   onNodeSelect?: (id: string) => void;
   onEdgeCreate?: (fromId: string, toId: string) => void;
+  onNodesForceUpdate?: (nodes: DiagramNode[]) => void;
 }
 
 const Controls = () => {
@@ -24,8 +26,99 @@ const Controls = () => {
   );
 };
 
-export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({ data, onNodeDrag, onNodeChange, onNodeSelect, onEdgeCreate }) => {
+export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
+  data,
+  onNodeDrag,
+  onNodeChange,
+  onNodeSelect,
+  onEdgeCreate,
+  onNodesForceUpdate
+}) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const simulationRef = useRef<any>(null);
+
+  // Local state for nodes to allow smooth physics updates without committing every tick
+  const [localNodes, setLocalNodes] = useState<DiagramNode[]>([]);
+
+  useEffect(() => {
+    if (data?.nodes) {
+        // Only update local nodes if the IDs or count changed significantly,
+        // OR if it's a fresh load.
+        // We want to avoid overwriting local physics state with "stale" props
+        // unless the props are definitely newer (e.g. undo/redo).
+        // For now, let's sync.
+        setLocalNodes(data.nodes);
+    }
+  }, [data?.nodes]);
+
+  // Setup Physics Simulation
+  useEffect(() => {
+    if (!localNodes.length) return;
+
+    // We only want to run simulation if we need to resolve overlaps
+    // But keeping it alive allows "magic" feel.
+    // However, we must be careful not to fight with user dragging.
+
+    const nodes = localNodes.map(n => ({ ...n })); // Copy for d3 mutation
+
+    const simulation = d3.forceSimulation(nodes as any)
+        .force("collide", d3.forceCollide().radius((d: any) => Math.max(d.width, d.height) / 2 + 10).strength(0.5).iterations(2))
+        .force("charge", d3.forceManyBody().strength(-100))
+        .alphaDecay(0.1)
+        .stop(); // Start stopped, tick manually or on event
+
+    simulationRef.current = simulation;
+
+    // We can define a function to "poke" the simulation
+
+    return () => {
+        simulation.stop();
+    };
+  }, []); // Run once on mount? Or recreate when nodes change?
+  // Recreating is safer for adding/removing nodes.
+
+  // Re-run simulation when nodes change size or count
+  useEffect(() => {
+      if (!simulationRef.current || !data?.nodes) return;
+
+      const simulation = simulationRef.current;
+      const currentNodes = localNodes;
+
+      // Update nodes in simulation
+      simulation.nodes(currentNodes);
+
+      // Warm up / Tick
+      simulation.alpha(0.3).restart();
+
+      simulation.on("tick", () => {
+          // Update local state with new positions
+          // We need to be careful about React render cycle loop.
+          // Maybe just use a ref for positions and force update?
+          // Or throttle state updates.
+
+          setLocalNodes(prev => prev.map(n => {
+              const d3Node = currentNodes.find(dn => dn.id === n.id) as any;
+              if (d3Node && (Math.abs(d3Node.x - n.x) > 1 || Math.abs(d3Node.y - n.y) > 1)) {
+                  return { ...n, x: d3Node.x, y: d3Node.y };
+              }
+              return n;
+          }));
+
+          // If we want to persist to Tiptap eventually, we do it after simulation settles (onEnd)
+      });
+
+      simulation.on("end", () => {
+          // Sync back to parent if changed?
+          if (onNodesForceUpdate) {
+              onNodesForceUpdate(currentNodes);
+          }
+      });
+
+  }, [data?.nodes.length]); // Only full restart on node count change?
+  // What about size change?
+  // If a node resizes, we want to kick the simulation.
+
+  // Actually, 'localNodes' shouldn't be in the dependency array of the effect that sets it.
 
   const [connectionState, setConnectionState] = useState<{
       isConnecting: boolean;
@@ -157,15 +250,57 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({ data, onNodeDrag, 
                         </svg>
                     )}
 
-                    {/* Nodes */}
-                    {data.nodes.map((node, i) => (
+                    {/* Nodes - Use localNodes for rendering to show physics */}
+                    {(localNodes.length > 0 ? localNodes : data.nodes).map((node, i) => (
                         <RoughNode
                             key={node.id}
                             node={node}
                             index={i}
                             scale={scale}
-                            onDrag={onNodeDrag}
-                            onNodeChange={onNodeChange}
+                            onDrag={(id, x, y) => {
+                                // Update local state immediately (Visual)
+                                setLocalNodes(prev => prev.map(n => n.id === id ? { ...n, x, y } : n));
+
+                                // Kick simulation to move others away while dragging?
+                                if (simulationRef.current) {
+                                    const simNode = simulationRef.current.nodes().find((n: any) => n.id === id);
+                                    if (simNode) {
+                                        simNode.fx = x; // Fix position while dragging
+                                        simNode.fy = y;
+                                    }
+                                    simulationRef.current.alpha(0.1).restart();
+                                }
+                            }}
+                            onDragStop={(id, x, y) => {
+                                // Commit final position to Tiptap History
+                                onNodeDrag(id, x, y);
+
+                                // Release fixed position in simulation
+                                if (simulationRef.current) {
+                                    const simNode = simulationRef.current.nodes().find((n: any) => n.id === id);
+                                    if (simNode) {
+                                        simNode.fx = null;
+                                        simNode.fy = null;
+                                    }
+                                    // Let it settle
+                                    simulationRef.current.alpha(0.3).restart();
+                                }
+                            }}
+                            onNodeChange={(id, updates) => {
+                                // Update local state
+                                setLocalNodes(prev => prev.map(n => n.id === id ? { ...n, ...updates } : n));
+
+                                // Propagate to parent
+                                onNodeChange?.(id, updates);
+
+                                // Kick physics if size changed
+                                if (updates.width || updates.height) {
+                                    if (simulationRef.current) {
+                                        simulationRef.current.nodes(localNodes); // Refresh data
+                                        simulationRef.current.alpha(0.3).restart();
+                                    }
+                                }
+                            }}
                             onNodeSelect={onNodeSelect}
                             onConnectionStart={handleConnectionStart}
                             onConnectionEnd={handleConnectionEnd}
