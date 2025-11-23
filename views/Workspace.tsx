@@ -6,10 +6,14 @@ interface WorkspaceProps {
   onNavigate: (view: ViewState) => void;
 }
 
+type ToolType = 'pan' | 'edit' | 'zoom';
+
 export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [showContextMenu, setShowContextMenu] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({ top: 0, left: 0 });
+  const [activeTool, setActiveTool] = useState<ToolType>('edit');
+  const [zoomLevel, setZoomLevel] = useState(1);
 
   const textRef = useRef<HTMLParagraphElement>(null);
 
@@ -24,6 +28,19 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
     } else {
         setShowContextMenu(false);
     }
+  };
+
+  const handleToolChange = (tool: ToolType) => {
+    setActiveTool(tool);
+    if (tool === 'zoom') {
+        setZoomLevel(prev => Math.min(prev + 0.1, 2)); // Simulate zoom in
+        setTimeout(() => setActiveTool('edit'), 500); // Switch back to edit after zoom action
+    }
+  };
+
+  const handleContextOptionClick = (label: string) => {
+    alert(`Visualizando como ${label}...`);
+    setShowContextMenu(false);
   };
 
   return (
@@ -70,7 +87,10 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
                         
                         {/* Floating Bolt Button (Visible when "selected") */}
                         <div className={`absolute -right-12 top-1/2 -translate-y-1/2 transition-all duration-300 ${showContextMenu ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 pointer-events-none'}`}>
-                            <button className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-off-black shadow-lg hover:scale-110 transition-transform">
+                            <button
+                                onClick={(e) => { e.stopPropagation(); alert('Quick action triggered!'); }}
+                                className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-off-black shadow-lg hover:scale-110 transition-transform"
+                            >
                                 <span className="material-symbols-outlined">bolt</span>
                             </button>
                         </div>
@@ -84,15 +104,37 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
         </div>
 
         {/* Right Panel: Canvas */}
-        <div className="flex-1 bg-[#FDFBF7] relative overflow-hidden">
+        <div className="flex-1 bg-[#FDFBF7] relative overflow-hidden" style={{ cursor: activeTool === 'pan' ? 'grab' : 'default' }}>
             {/* Dot Grid Background */}
-            <div className="absolute inset-0" style={{ backgroundImage: 'radial-gradient(#d1d5db 1px, transparent 1px)', backgroundSize: '24px 24px' }}></div>
+            <div
+                className="absolute inset-0 transition-transform duration-200"
+                style={{
+                    backgroundImage: 'radial-gradient(#d1d5db 1px, transparent 1px)',
+                    backgroundSize: '24px 24px',
+                    transform: `scale(${zoomLevel})`
+                }}
+            ></div>
 
             {/* Floating Toolbar */}
             <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-white border border-gray-200 shadow-xl rounded-[20px_20px_0_0] px-6 py-3 flex gap-6">
-                <button className="text-gray-500 hover:text-off-black hover:bg-gray-100 p-2 rounded-full transition-colors"><span className="material-symbols-outlined">pan_tool</span></button>
-                <button className="text-off-black bg-gray-100 p-2 rounded-full ring-2 ring-gray-300"><span className="material-symbols-outlined">edit</span></button>
-                <button className="text-gray-500 hover:text-off-black hover:bg-gray-100 p-2 rounded-full transition-colors"><span className="material-symbols-outlined">zoom_in</span></button>
+                <button
+                    onClick={() => handleToolChange('pan')}
+                    className={`p-2 rounded-full transition-colors ${activeTool === 'pan' ? 'text-off-black bg-gray-100 ring-2 ring-gray-300' : 'text-gray-500 hover:text-off-black hover:bg-gray-100'}`}
+                >
+                    <span className="material-symbols-outlined">pan_tool</span>
+                </button>
+                <button
+                    onClick={() => handleToolChange('edit')}
+                    className={`p-2 rounded-full transition-colors ${activeTool === 'edit' ? 'text-off-black bg-gray-100 ring-2 ring-gray-300' : 'text-gray-500 hover:text-off-black hover:bg-gray-100'}`}
+                >
+                    <span className="material-symbols-outlined">edit</span>
+                </button>
+                <button
+                    onClick={() => handleToolChange('zoom')}
+                    className={`p-2 rounded-full transition-colors ${activeTool === 'zoom' ? 'text-off-black bg-gray-100 ring-2 ring-gray-300' : 'text-gray-500 hover:text-off-black hover:bg-gray-100'}`}
+                >
+                    <span className="material-symbols-outlined">zoom_in</span>
+                </button>
             </div>
         </div>
       </div>
@@ -114,7 +156,11 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
                 { icon: 'sync', label: 'Ciclo' },
                 { icon: 'schema', label: 'Jerarquía' }
             ].map((item) => (
-                <button key={item.label} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/10 transition-colors text-left group">
+                <button
+                    key={item.label}
+                    onClick={() => handleContextOptionClick(item.label)}
+                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/10 transition-colors text-left group"
+                >
                     <div className="flex h-8 w-8 items-center justify-center rounded-md bg-white/5 text-primary group-hover:bg-primary group-hover:text-black transition-colors">
                         <span className="material-symbols-outlined text-lg">{item.icon}</span>
                     </div>

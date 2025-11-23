@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { OrganicButton } from './OrganicButton';
 
 interface ExportModalProps {
@@ -6,8 +6,17 @@ interface ExportModalProps {
   onClose: () => void;
 }
 
+type Format = 'PNG' | 'SVG';
+
 export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose }) => {
+  const [selectedFormat, setSelectedFormat] = useState<Format>('PNG');
+
   if (!isOpen) return null;
+
+  const handleDownload = () => {
+    alert(`Descargando en formato ${selectedFormat}...`);
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -26,19 +35,25 @@ export const ExportModal: React.FC<ExportModalProps> = ({ isOpen, onClose }) => 
         <h2 className="font-grotesk text-2xl font-bold text-center mb-6">Lleva tu Trazo contigo</h2>
 
         <div className="grid grid-cols-2 gap-4 mb-8">
-            <button className="flex flex-col items-center justify-center gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-primary hover:bg-primary/5 transition-all focus:ring-2 focus:ring-primary focus:outline-none">
+            <button
+                onClick={() => setSelectedFormat('PNG')}
+                className={`flex flex-col items-center justify-center gap-3 p-4 border-2 rounded-lg transition-all focus:outline-none ${selectedFormat === 'PNG' ? 'border-primary bg-primary/5 ring-2 ring-primary' : 'border-gray-200 hover:border-primary hover:bg-primary/5'}`}
+            >
                 <span className="material-symbols-outlined text-4xl">image</span>
                 <span className="text-sm font-bold">Imagen (PNG)</span>
             </button>
             
-            <button className="relative flex flex-col items-center justify-center gap-3 p-4 border-2 border-gray-200 rounded-lg hover:border-primary hover:bg-primary/5 transition-all focus:ring-2 focus:ring-primary focus:outline-none">
+            <button
+                onClick={() => setSelectedFormat('SVG')}
+                className={`relative flex flex-col items-center justify-center gap-3 p-4 border-2 rounded-lg transition-all focus:outline-none ${selectedFormat === 'SVG' ? 'border-primary bg-primary/5 ring-2 ring-primary' : 'border-gray-200 hover:border-primary hover:bg-primary/5'}`}
+            >
                 <div className="absolute top-2 right-2 bg-primary text-[10px] font-bold px-1.5 rounded text-off-black">PRO</div>
                 <span className="material-symbols-outlined text-4xl">gesture</span>
                 <span className="text-sm font-bold">Vector (SVG)</span>
             </button>
         </div>
 
-        <OrganicButton className="w-full h-12 text-lg" onClick={onClose}>
+        <OrganicButton className="w-full h-12 text-lg" onClick={handleDownload}>
             Descargar
         </OrganicButton>
       </div>

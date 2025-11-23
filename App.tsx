@@ -4,6 +4,7 @@ import { Login } from './views/Login';
 import { Dashboard } from './views/Dashboard';
 import { Loading } from './views/Loading';
 import { Workspace } from './views/Workspace';
+import { NoteProvider } from './context/NoteContext';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<ViewState>(ViewState.LOGIN);
@@ -24,8 +25,10 @@ export default function App() {
   };
 
   return (
-    <main className="w-full h-screen text-off-black">
-      {renderView()}
-    </main>
+    <NoteProvider>
+      <main className="w-full h-screen text-off-black">
+        {renderView()}
+      </main>
+    </NoteProvider>
   );
 }
