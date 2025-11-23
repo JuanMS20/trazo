@@ -20,28 +20,49 @@ export const RoughEdge: React.FC<RoughEdgeProps> = ({ edge, fromNode, toNode, in
         svgRef.current.removeChild(svgRef.current.firstChild);
       }
 
-      // Calculate rough start and end points
-      // (For simplicity, we draw from center to center, but roughjs handles it nicely)
-      // To make it better, we would calculate intersection points, but for now center-center is fine for MVP
-
       const x1 = fromNode.x;
       const y1 = fromNode.y;
       const x2 = toNode.x;
       const y2 = toNode.y;
 
-      // Draw a slightly curved line or straight line
-      const line = rc.line(x1, y1, x2, y2, {
-        roughness: 1.2,
-        bowing: 2,
-        stroke: '#94a3b8',
-        strokeWidth: 1.5
-      });
+      const isInfographic = fromNode.variant === 'infographic' || toNode.variant === 'infographic';
 
-      // Arrowhead logic (simple line for now, or use another rough path)
-      // Simplified arrowhead simulation
-      // ...
+      if (isInfographic) {
+          // Curved styling for infographic
+          // Calculate control point for curve
+          // Simple quadratic curve offset
+          const cx = (x1 + x2) / 2;
+          const cy = (y1 + y2) / 2 - 50; // Curve upwards
 
-      svgRef.current.appendChild(line);
+          const path = rc.curve(
+              [
+                  [x1, y1],
+                  [cx, cy],
+                  [x2, y2]
+              ],
+              {
+                  roughness: 0.5,
+                  bowing: 0.5,
+                  stroke: '#cbd5e1', // Lighter gray
+                  strokeWidth: 2
+              }
+          );
+          svgRef.current.appendChild(path);
+
+          // Add small circle at end?
+          const endCircle = rc.circle(x2, y2, 8, { fill: 'white', fillStyle: 'solid', stroke: '#cbd5e1' });
+          svgRef.current.appendChild(endCircle);
+
+      } else {
+          // Standard sketchy line
+          const line = rc.line(x1, y1, x2, y2, {
+            roughness: 1.2,
+            bowing: 2,
+            stroke: '#94a3b8',
+            strokeWidth: 1.5
+          });
+          svgRef.current.appendChild(line);
+      }
     }
   }, [edge, fromNode, toNode]);
 
