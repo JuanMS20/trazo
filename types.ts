@@ -24,7 +24,7 @@ export interface DiagramNode {
   y: number;
   width: number;
   height: number;
-  type: 'rectangle' | 'circle' | 'ellipse' | 'diamond';
+  type: 'rectangle' | 'circle' | 'ellipse' | 'diamond' | 'container';
   color?: string;
   icon?: string;
   variant?: 'default' | 'infographic'; // To switch rendering style
@@ -40,6 +40,6 @@ export interface DiagramEdge {
 export interface DiagramData {
   nodes: DiagramNode[];
   edges: DiagramEdge[];
-  type: 'flowchart' | 'mindmap' | 'cycle' | 'hierarchy' | 'infographic' | 'matrix' | 'timeline';
+  type: 'flowchart' | 'mindmap' | 'cycle' | 'hierarchy' | 'infographic' | 'matrix' | 'timeline' | 'network';
   sourceText?: string;
 }
