@@ -4,6 +4,7 @@ import { DiagramCanvas } from '../DiagramCanvas';
 import { DiagramData, DiagramNode } from '../../types';
 import * as htmlToImage from 'html-to-image';
 import download from 'downloadjs';
+import { generateSvgString } from '../../utils/svgGenerator';
 
 export const DiagramNodeView: React.FC<NodeViewProps> = ({ node, updateAttributes, selected }) => {
   const data = node.attrs.data as DiagramData | null;
@@ -73,8 +74,13 @@ export const DiagramNodeView: React.FC<NodeViewProps> = ({ node, updateAttribute
               const dataUrl = await htmlToImage.toPng(element, { backgroundColor: '#FDFBF7' });
               download(dataUrl, 'diagram.png');
           } else {
-              const dataUrl = await htmlToImage.toSvg(element, { backgroundColor: '#FDFBF7' });
-              download(dataUrl, 'diagram.svg');
+              if (data) {
+                  const svgString = generateSvgString(data);
+                  const blob = new Blob([svgString], { type: 'image/svg+xml' });
+                  const url = URL.createObjectURL(blob);
+                  download(url, 'diagram.svg');
+                  URL.revokeObjectURL(url);
+              }
           }
       } catch (error) {
           console.error('Export failed', error);
