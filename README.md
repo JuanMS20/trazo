@@ -1,6 +1,6 @@
 # Trazo ✏️
 
-Trazo is a creative **text-to-visuals** application that transforms your written ideas into beautiful, hand-drawn diagrams and infographics instantly. Inspired by tools like Napkin.ai, it combines a distraction-free writing environment with powerful visual generation agents.
+Trazo is a creative **text-to-visuals** application that transforms your written ideas into beautiful, hand-drawn diagrams and infographics instantly. It combines a distraction-free writing environment with powerful visual generation agents to help you communicate complex concepts with ease.
 
 ![Trazo Screenshot](https://via.placeholder.com/800x450.png?text=Trazo+Application+Preview)
 
