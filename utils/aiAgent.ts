@@ -1,274 +1,124 @@
-import { DiagramNode, DiagramEdge } from '../types';
+import { DiagramNode, DiagramEdge, DiagramData } from '../types';
 import { layoutDiagram } from './layoutEngine';
 
-// Heuristics
-const LIST_MARKERS = ['-', '*', '1.', '2.', '•'];
-const COMPARISON_KEYWORDS = ['vs', 'diferencia', 'comparar', 'contra', 'frente a'];
-const CYCLE_KEYWORDS = ['ciclo', 'repetir', 'bucle', 'proceso', 'pasos'];
-const HIERARCHY_KEYWORDS = ['consiste en', 'tipos de', 'clasifica', 'dividen', 'partes', 'componentes'];
+const API_KEY = process.env.CHUTES_API_KEY;
+const API_URL = process.env.CHUTES_API_URL || "https://llm.chutes.ai/v1/chat/completions";
+const MODEL = process.env.CHUTES_MODEL || "kimik2-0905";
 
-// Mock Knowledge Base for "Expansion"
-const KNOWLEDGE_BASE: Record<string, { title: string; nodes: { title: string; desc: string }[] }> = {
-    'guerra mundial': {
-        title: 'La Segunda Guerra Mundial impacta la política global',
-        nodes: [
-            { title: 'Naciones Unidas', desc: 'Organización internacional para la paz' },
-            { title: 'Guerra Fría', desc: 'Rivalidad geopolítica entre superpotencias' },
-            { title: 'Descolonización', desc: 'Fin de los imperios coloniales europeos' }
-        ]
-    },
-    'marketing': {
-        title: 'Estrategia de Marketing Digital',
-        nodes: [
-            { title: 'SEO', desc: 'Optimización para motores de búsqueda' },
-            { title: 'Redes Sociales', desc: 'Construcción de comunidad y marca' },
-            { title: 'Email Marketing', desc: 'Fidelización de clientes' }
-        ]
-    },
-    'ciclo del agua': {
-        title: 'El Ciclo Hidrológico Vital',
-        nodes: [
-            { title: 'Evaporación', desc: 'El agua se convierte en vapor' },
-            { title: 'Condensación', desc: 'Formación de nubes' },
-            { title: 'Precipitación', desc: 'Lluvia, nieve o granizo' }
-        ]
-    }
-};
-
-// Simple Icon Mapping
-const ICON_MAP: Record<string, string> = {
-    'idea': 'lightbulb',
-    'tiempo': 'schedule',
-    'dinero': 'attach_money',
-    'costo': 'attach_money',
-    'usuario': 'person',
-    'cliente': 'face',
-    'servidor': 'dns',
-    'base de datos': 'database',
-    'objetivo': 'flag',
-    'meta': 'emoji_events',
-    'problema': 'warning',
-    'error': 'error',
-    'solución': 'check_circle',
-    'inicio': 'play_arrow',
-    'fin': 'stop',
-    'pregunta': 'help',
-    'duda': 'help',
-    'herramienta': 'build',
-    'trabajo': 'work',
-    'email': 'mail',
-    'mensaje': 'chat'
-};
-
-interface AnalysisResult {
-  nodes: DiagramNode[];
-  edges: DiagramEdge[];
-}
-
-const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-const getIconForText = (text: string): string | undefined => {
-    const lower = text.toLowerCase();
-    for (const key of Object.keys(ICON_MAP)) {
-        if (lower.includes(key)) return ICON_MAP[key];
-    }
-    return undefined;
-};
-
-/**
- * Simulates an AI agent that parses text and extracts structure.
- * It includes simulated delays to mimic "thinking" time.
- */
 export class AiAgent {
+  static async analyzeAndGenerate(
+    text: string,
+    progressCallback: (step: string) => void,
+    forceType?: string
+  ): Promise<DiagramData> {
 
-  static async analyzeAndGenerate(text: string, progressCallback: (step: string) => void, forceType?: string): Promise<{ nodes: DiagramNode[], edges: DiagramEdge[], type?: string }> {
+    // 1. ANÁLISIS: Preparamos la llamada a Chutes.ai
+    progressCallback(`🧠 Consultando a ${MODEL}...`);
 
-    // Step 1: Semantic Analysis
-    progressCallback("🤖 Analizando semántica...");
-    await sleep(800); // Fake delay
-
-    const lowerText = text.toLowerCase().trim();
-    const sentences = text.split(/[.!?\n]/).filter(s => s.trim().length > 3);
-
-    // Determine Pattern: ForceType takes precedence, else heuristics
-    let pattern = 'sequence';
-
-    if (forceType) {
-        // Map forceType to pattern logic
-        if (forceType === 'flowchart') pattern = 'sequence'; // Sequence/Flowchart same logic here
-        else if (forceType === 'tree') pattern = 'hierarchy'; // tree map to hierarchy logic
-        else pattern = forceType; // 'cycle', 'comparison', 'infographic', 'hierarchy'
-    } else {
-        // Heuristics
-        if (text.length < 50 && !text.includes('\n')) pattern = 'infographic'; // Heuristic for infographic
-        else if (COMPARISON_KEYWORDS.some(k => lowerText.includes(k))) pattern = 'comparison';
-        else if (CYCLE_KEYWORDS.some(k => lowerText.includes(k))) pattern = 'cycle';
-        else if (HIERARCHY_KEYWORDS.some(k => lowerText.includes(k)) || sentences.some(s => LIST_MARKERS.some(m => s.trim().startsWith(m)))) pattern = 'hierarchy';
+    if (!API_KEY) {
+      console.error("Falta la API Key de Chutes");
+      throw new Error("API Key no configurada");
     }
 
-    const nodes: DiagramNode[] = [];
-    const edges: DiagramEdge[] = [];
+    // Definimos el prompt del sistema con instrucciones estrictas de JSON
+    const systemPrompt = `
+      Eres un experto arquitecto de información y visualización de datos. Tu única tarea es convertir texto en una estructura JSON para diagramas.
 
-    const createNode = (id: string, text: string, type: DiagramNode['type'] = 'rectangle', color = 'white', width = 150, height = 70): DiagramNode => {
-        return {
-            id,
-            text: text.substring(0, 40) + (text.length > 40 ? '...' : ''),
-            x: 0, y: 0,
-            width, height,
-            type, color,
-            icon: getIconForText(text)
-        };
-    };
+      Reglas de Salida:
+      1. RESPONDE ÚNICAMENTE CON UN JSON VÁLIDO. No añadas texto antes ni después. No uses bloques de código markdown (\`\`\`json).
+      2. Estructura JSON requerida:
+         {
+           "nodes": [ { "id": "string", "text": "string (max 6 palabras)", "type": "rectangle|circle|diamond", "variant": "default|infographic" } ],
+           "edges": [ { "id": "string", "fromId": "string", "toId": "string", "label": "string (opcional)" } ]
+         }
+      3. Lógica de Diseño:
+         - Usa 'diamond' para decisiones o preguntas clave.
+         - Usa 'circle' para conceptos centrales, inicio o fin.
+         - Usa 'rectangle' para pasos de proceso o información.
+      4. Simplifica el texto de los nodos para que sea visualmente digerible.
+      ${forceType ? `5. IMPORTANTE: El usuario solicitó explícitamente un diagrama tipo: ${forceType}. Estructura los nodos acorde a eso.` : ''}
+    `;
 
-    if (pattern === 'infographic') {
-        progressCallback("✨ Activando Modo Creativo...");
-        if (!forceType) await sleep(800); // Only sleep if auto-detected
+    try {
+      const response = await fetch(API_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${API_KEY}`
+        },
+        body: JSON.stringify({
+          model: MODEL,
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: `Genera el diagrama para este texto: "${text}"` }
+          ],
+          temperature: 0.7, // Un poco de creatividad pero controlada
+          max_tokens: 2000
+        })
+      });
 
-        let data = { title: `Análisis de: ${text.substring(0,20)}...`, nodes: [{ title: 'Concepto 1', desc: 'Descripción clave.' }, { title: 'Concepto 2', desc: 'Impacto relevante.' }, { title: 'Concepto 3', desc: 'Conclusión.' }] };
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Error de API (${response.status}): ${errorText}`);
+      }
 
-        // If text matches knowledge base, use it. Even if forced, we try to use KB if text matches keys.
-        for (const key in KNOWLEDGE_BASE) {
-            if (lowerText.includes(key)) {
-                data = KNOWLEDGE_BASE[key];
-                break;
-            }
-        }
-        // If forced infographic on long text? We might need to summarize.
-        // For simulation: We just use the first few sentences as points if not in KB.
-        if (text.length >= 50 && !KNOWLEDGE_BASE[Object.keys(KNOWLEDGE_BASE).find(k => lowerText.includes(k)) || '']) {
-             data = {
-                 title: "Resumen Visual",
-                 nodes: sentences.slice(0, 4).map(s => ({ title: s.substring(0, 20), desc: s.substring(0, 50) }))
-             };
-        }
+      const data = await response.json();
 
-        const rootId = 'root-infographic';
-        nodes.push({
-            id: rootId,
-            text: data.title,
-            x: 400, y: 500,
-            width: 220, height: 220,
-            type: 'circle',
-            color: '#FDE68A',
-            variant: 'infographic',
-            label: 'Main'
-        });
+      // Validamos que haya respuesta
+      if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+        throw new Error("Formato de respuesta inesperado de Chutes.ai");
+      }
 
-        data.nodes.forEach((item, i) => {
-            const id = `info-node-${i}`;
-            nodes.push({
-                id,
-                text: item.title,
-                description: item.desc,
-                label: (i + 1).toString(),
-                x: 0, y: 0,
-                width: 180, height: 180,
-                type: 'circle',
-                color: 'white',
-                variant: 'infographic'
-            });
-            edges.push({ id: `edge-${i}`, fromId: rootId, toId: id });
-        });
+      let content = data.choices[0].message.content;
 
-        // Radial Layout
-        const centerX = 400;
-        const centerY = 500;
-        const radius = 300;
-        const totalAngle = 140 * (Math.PI / 180); // Slightly wider arc
-        const startRad = 200 * (Math.PI / 180);
+      // Limpieza defensiva por si el modelo incluye bloques markdown
+      content = content.replace(/```json/g, '').replace(/```/g, '').trim();
 
-        nodes.forEach((n) => {
-            if (n.id === rootId) {
-                n.x = centerX;
-                n.y = centerY;
-            } else {
-                const index = parseInt(n.label || '0') - 1;
-                const count = data.nodes.length;
-                const angleStep = count > 1 ? totalAngle / (count - 1) : 0;
-                const angle = startRad + (index * angleStep);
-                n.x = centerX + radius * Math.cos(angle);
-                n.y = centerY + radius * Math.sin(angle);
-            }
-        });
+      // 2. PROCESAMIENTO: Parseamos el JSON
+      progressCallback("DT Procesando estructura...");
+      let result;
+      try {
+          result = JSON.parse(content);
+      } catch (e) {
+          console.error("Fallo al parsear JSON:", content);
+          throw new Error("La IA no devolvió un JSON válido.");
+      }
 
-        return { nodes, edges, type: 'infographic' };
+      let nodes: DiagramNode[] = result.nodes || [];
+      let edges: DiagramEdge[] = result.edges || [];
 
-    } else if (pattern === 'comparison') {
-        const half = Math.ceil(sentences.length / 2);
-        const groupA = sentences.slice(0, half);
-        const groupB = sentences.slice(half);
+      // Saneamiento de datos
+      nodes = nodes.map(node => ({
+        ...node,
+        width: node.width || 150,
+        height: node.height || 80,
+        x: 0,
+        y: 0
+      }));
 
-        groupA.forEach((s, i) => {
-            const id = `col-a-${i}`;
-            nodes.push(createNode(id, s.trim(), 'rectangle', '#BFDBFE'));
-             if (i > 0) edges.push({ id: `edge-a-${i}`, fromId: `col-a-${i-1}`, toId: id });
-        });
+      // 3. GEOMETRÍA: Calculamos posiciones
+      progressCallback("📐 Dibujando diagrama...");
+      const layoutData = layoutDiagram(nodes, edges);
 
-        groupB.forEach((s, i) => {
-            const id = `col-b-${i}`;
-            nodes.push(createNode(id, s.trim(), 'rectangle', '#FECACA'));
-            if (i > 0) edges.push({ id: `edge-b-${i}`, fromId: `col-b-${i-1}`, toId: id });
-        });
+      return {
+        nodes: layoutData.nodes,
+        edges: layoutData.edges,
+        type: (forceType as any) || 'flowchart'
+      };
 
-    } else if (pattern === 'cycle') {
-        sentences.forEach((s, i) => {
-            const id = `node-${i}`;
-            nodes.push(createNode(id, s.trim(), 'circle', '#E9D5FF', 140, 140));
-            if (i > 0) edges.push({ id: `edge-${i}`, fromId: `node-${i-1}`, toId: id });
-        });
-        if (nodes.length > 1) {
-            edges.push({ id: 'edge-cycle', fromId: nodes[nodes.length-1].id, toId: nodes[0].id });
-        }
-
-    } else if (pattern === 'hierarchy') {
-         const rootId = 'root';
-         const title = sentences[0].length < 30 ? sentences[0] : "Concepto Principal";
-         const children = sentences[0].length < 30 ? sentences.slice(1) : sentences;
-
-        nodes.push(createNode(rootId, title.replace(/^[-*•\d\.]+\s*/, ''), 'diamond', '#FDE68A', 160, 80));
-
-        children.forEach((s, i) => {
-            const cleanText = s.replace(/^[-*•\d\.]+\s*/, '').trim();
-            if (!cleanText) return;
-            const id = `node-${i}`;
-            nodes.push(createNode(id, cleanText, 'rectangle', 'white'));
-            edges.push({ id: `edge-${i}`, fromId: rootId, toId: id });
-        });
-
-    } else {
-        // Sequence / Timeline
-        sentences.forEach((s, i) => {
-            const cleanText = s.trim();
-            const id = `node-${i}`;
-            let type: DiagramNode['type'] = 'rectangle';
-            let color = 'white';
-
-            if (i === 0) { type = 'circle'; color = '#BFDBFE'; }
-            else if (i === sentences.length - 1) { type = 'circle'; color = '#BFDBFE'; }
-            else if (cleanText.includes('?')) { type = 'diamond'; color = '#FECACA'; }
-
-            nodes.push(createNode(id, cleanText, type, color));
-
-            if (i > 0) {
-                edges.push({ id: `edge-${i}`, fromId: `node-${i-1}`, toId: id });
-            }
-        });
+    } catch (error) {
+      console.error("Error en AI Agent:", error);
+      // Fallback visual en caso de error
+      return {
+        nodes: [
+            { id: 'err1', text: 'Error de Conexión', x: 0, y: 0, width: 180, height: 80, type: 'diamond', color: '#FECACA' },
+            { id: 'err2', text: 'Intenta de nuevo', x: 0, y: 0, width: 180, height: 80, type: 'rectangle' }
+        ],
+        edges: [
+            { id: 'e1', fromId: 'err1', toId: 'err2', label: 'Revisar consola' }
+        ],
+        type: 'flowchart'
+      };
     }
-
-    // Step 2: Structural Optimization (Layout) for standard types
-    progressCallback("📐 Calculando geometría...");
-    await sleep(800);
-
-    // Use dagre for layout, but check if timeline needs horizontal
-    const layoutData = layoutDiagram(nodes, edges);
-    // Dagre default in layoutEngine is Top-Bottom. Timeline might want Left-Right.
-    // For now, sticking to one layout engine config for simplicity unless forceType is timeline?
-    // Let's keep it simple.
-
-    // Step 3: Final Polish
-    progressCallback("🎨 Renderizando estilo 'Napkin'...");
-    await sleep(600);
-
-    return { nodes: layoutData.nodes, edges: layoutData.edges };
   }
 }
