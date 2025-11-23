@@ -54,7 +54,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
     content: localStorage.getItem('trazo_editor_content') || '',
     editorProps: {
       attributes: {
-        class: 'prose prose-lg focus:outline-none max-w-none',
+        class: 'prose prose-lg focus:outline-none max-w-none font-serif',
       },
     },
     onUpdate: ({ editor }) => {
@@ -95,7 +95,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
 
         const finalData = {
             ...result,
-            type: result.type as any || 'flowchart'
+            type: result.type as any || 'flowchart',
+            sourceText: text // Persist original source text
         };
 
         if (selectedDiagram && forceType) {
@@ -165,14 +166,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
       // Let's assume re-generation for now as it's safer for "Infographic" vs "Flowchart" logic which differs in structure.
 
       if (selectedDiagram) {
-           // We need the source text. We don't store source text in diagram data currently.
-           // We can assume the "context" is lost or we use the node texts.
-           // Let's fallback to "Please select text" if no text source.
-           // OR: Just re-use the nodes and re-layout?
-           // The prompt implies `runAgentPipeline` handles it.
-
-           // Hack: Construct text from nodes
-           const text = selectedDiagram.data.nodes.map(n => n.text).join(". ");
+           // Use persisted source text if available, otherwise reconstruct from nodes
+           const text = selectedDiagram.data.sourceText || selectedDiagram.data.nodes.map(n => n.text).join(". ") || "Texto no disponible";
            runAgentPipeline(text, type);
       } else {
           // No diagram selected, maybe text selected?
