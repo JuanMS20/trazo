@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { ViewState, DiagramData } from '../types';
 import { ExportModal } from '../components/ExportModal';
 import { DiagramCanvas } from '../components/DiagramCanvas';
@@ -19,26 +19,65 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [diagramData, setDiagramData] = useState<DiagramData | null>(null);
   const [selectedText, setSelectedText] = useState<string>('');
+  const [editorContent, setEditorContent] = useState<string>('');
+
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Agent state
   const [isProcessing, setIsProcessing] = useState(false);
   const [processStep, setProcessStep] = useState('');
 
-  // Simulate context menu trigger
-  const handleTextClick = (e: React.MouseEvent) => {
-    const target = e.currentTarget as HTMLElement;
-    const text = target.innerText;
-    setSelectedText(text);
+  const handleSelection = (triggerEvent?: React.SyntheticEvent) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
 
-    // Toggle context menu for demonstration
-    if (!showContextMenu) {
-        // Position near the click, slightly offset
-        const rect = e.currentTarget.getBoundingClientRect();
-        setContextMenuPosition({ top: rect.top + rect.height + 10, left: rect.left + 50 });
-        setShowContextMenu(true);
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+
+    if (start !== end) {
+      const text = textarea.value.substring(start, end);
+      setSelectedText(text);
+
+      // If triggered by mouse, we use mouse coordinates (passed via triggerEvent if available)
+      // If keyboard (onSelect), we might need to approximate or just use a default position?
+      // Textarea cursor coordinates are hard.
+      // For MVP, if no mouse event, we center it or put it near the textarea.
+
+      let top = 0;
+      let left = 0;
+
+      if (triggerEvent && 'clientY' in triggerEvent.nativeEvent) {
+          const mouseEvent = triggerEvent as React.MouseEvent;
+          top = mouseEvent.clientY + 10;
+          left = mouseEvent.clientX + 10;
+      } else {
+          // Fallback for keyboard selection: Position near the center of the textarea or bottom right
+          // Ideally we would calculate caret position, but that requires a library or complex logic.
+          const rect = textarea.getBoundingClientRect();
+          top = rect.top + rect.height / 2;
+          left = rect.left + rect.width / 2;
+      }
+
+      setContextMenuPosition({ top, left });
+      setShowContextMenu(true);
     } else {
-        setShowContextMenu(false);
+      // setShowContextMenu(false); // Optional: hide on deselect
     }
+  };
+
+  const handleMouseUp = (e: React.MouseEvent) => {
+      handleSelection(e);
+  };
+
+  const handleKeyUp = (e: React.KeyboardEvent) => {
+      // specific keys like Shift+Arrow or Ctrl+A might trigger selection
+      // It's easier to just check selection on every keyup or use onSelect
+      handleSelection();
+  };
+
+  const handleSelect = (e: React.SyntheticEvent) => {
+      // onSelect fires when selection changes
+      handleSelection(e);
   };
 
   const runAgentPipeline = async (text: string) => {
@@ -65,7 +104,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
 
   const handleBoltClick = (e: React.MouseEvent) => {
       e.stopPropagation();
-      runAgentPipeline(selectedText || "Una vez que entendemos el problema...");
+      runAgentPipeline(selectedText || editorContent || "Texto de ejemplo");
   };
 
   const handleToolChange = (tool: ToolType) => {
@@ -77,7 +116,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
   };
 
   const handleContextOptionClick = (label: string) => {
-    runAgentPipeline(selectedText || "Texto de ejemplo");
+    runAgentPipeline(selectedText || editorContent || "Texto de ejemplo");
   };
 
   return (
@@ -102,47 +141,34 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
       {/* Main Split Pane */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left Panel: Editor */}
-        <div className="w-1/3 min-w-[400px] bg-white h-full overflow-y-auto border-r border-gray-100 shadow-lg z-10">
-            <div className="max-w-2xl mx-auto p-12 pt-8">
-                <h1 className="font-sans text-3xl font-bold text-off-black mb-6">Brainstorming Sesión</h1>
+        <div className="w-1/3 min-w-[400px] bg-white h-full border-r border-gray-100 shadow-lg z-10 flex flex-col">
+            <div className="flex-1 p-8 pt-8 overflow-y-auto relative">
+                <textarea
+                    ref={textareaRef}
+                    className="w-full h-full resize-none outline-none font-serif text-lg leading-relaxed text-gray-700 placeholder:text-gray-300"
+                    placeholder="Escribe aquí tu historia, ideas o notas. Selecciona el texto para visualizar..."
+                    value={editorContent}
+                    onChange={(e) => setEditorContent(e.target.value)}
+                    onSelect={handleSelect}
+                    onMouseUp={handleMouseUp}
+                    onKeyUp={handleKeyUp}
+                />
                 
-                <div className="font-serif text-lg leading-relaxed text-gray-700 space-y-6">
-                    <p
-                        onClick={handleTextClick}
-                        className="cursor-pointer hover:bg-gray-50 p-1 -m-1 rounded transition-colors"
+                {/* Floating Context Menu Button (Visible when selection exists) */}
+                {showContextMenu && (
+                    <div
+                        className="absolute z-20 animate-bounce-in"
+                        style={{ top: contextMenuPosition.top - 60, left: contextMenuPosition.left }}
                     >
-                        El primer paso es definir claramente el problema que intentamos resolver. Sin una comprensión sólida del problema, cualquier solución será una conjetura.
-                    </p>
-
-                    {/* Interactive Paragraph for Context Menu Demo */}
-                    <div className="relative group">
-                        <p 
-                            onClick={handleTextClick}
-                            className={`relative cursor-pointer transition-colors duration-300 rounded-lg p-1 -m-1 ${showContextMenu ? 'bg-primary/20' : 'hover:bg-gray-50'}`}
+                         <button
+                            onClick={handleBoltClick}
+                            className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-off-black shadow-lg hover:scale-110 transition-transform"
+                            title="Generar Visual"
                         >
-                            <span className={showContextMenu ? 'bg-primary/30' : ''}>
-                                Una vez que entendemos el problema, podemos comenzar a idear posibles soluciones. Esta fase debe ser lo más abierta y libre posible, fomentando la creatividad y el pensamiento divergente.
-                            </span>
-                        </p>
-                        
-                        {/* Floating Bolt Button (Visible when "selected") */}
-                        <div className={`absolute -right-12 top-1/2 -translate-y-1/2 transition-all duration-300 ${showContextMenu ? 'opacity-100 translate-x-0' : 'opacity-0 -translate-x-4 pointer-events-none'}`}>
-                            <button
-                                onClick={handleBoltClick}
-                                className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-off-black shadow-lg hover:scale-110 transition-transform"
-                            >
-                                <span className="material-symbols-outlined">bolt</span>
-                            </button>
-                        </div>
+                            <span className="material-symbols-outlined text-2xl">bolt</span>
+                        </button>
                     </div>
-
-                    <p
-                        onClick={handleTextClick}
-                        className="cursor-pointer hover:bg-gray-50 p-1 -m-1 rounded transition-colors"
-                    >
-                        Después de la fase de ideación, debemos evaluar las soluciones propuestas frente a un conjunto de criterios predefinidos.
-                    </p>
-                </div>
+                )}
             </div>
         </div>
 
@@ -191,18 +217,25 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
         </div>
       </div>
 
-      {/* Context Menu Popover (Fixed position for demo) */}
+      {/* Extended Context Menu Popover (When bolt is NOT clicked directly, or could be a separate interaction) */}
+
       {showContextMenu && !isProcessing && (
         <div 
-            className="absolute z-50 w-72 rounded-xl bg-[#212121] text-white shadow-2xl p-2 flex flex-col gap-1 animate-[fadeIn_0.2s_ease-out]"
-            style={{ top: '40%', left: '360px' }} // Positioned relative to the mock layout
+            className="absolute z-50 w-64 rounded-xl bg-[#212121] text-white shadow-2xl p-2 flex flex-col gap-1 animate-[fadeIn_0.2s_ease-out]"
+            style={{ top: contextMenuPosition.top + 10, left: contextMenuPosition.left }}
         >
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-white/10 mb-1">
-                <span className="material-symbols-outlined text-sm text-primary">visibility</span>
-                <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Visualizar como...</span>
+             <div className="flex items-center justify-between px-3 py-2 border-b border-white/10 mb-1">
+                 <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-sm text-primary">auto_awesome</span>
+                    <span className="text-xs font-medium text-gray-400 uppercase tracking-wider">Generar...</span>
+                 </div>
+                 <button onClick={() => setShowContextMenu(false)} className="text-gray-500 hover:text-white">
+                    <span className="material-symbols-outlined text-sm">close</span>
+                 </button>
             </div>
             
-            {[
+             {[
+                { icon: 'bolt', label: 'Automático' },
                 { icon: 'account_tree', label: 'Diagrama de Flujo' },
                 { icon: 'psychology', label: 'Mapa Mental' },
                 { icon: 'sync', label: 'Ciclo' },
@@ -210,14 +243,13 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
             ].map((item) => (
                 <button
                     key={item.label}
-                    onClick={() => handleContextOptionClick(item.label)}
-                    className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-white/10 transition-colors text-left group"
+                    onClick={() => item.label === 'Automático' ? handleBoltClick({ stopPropagation: () => {} } as any) : handleContextOptionClick(item.label)}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/10 transition-colors text-left group"
                 >
-                    <div className="flex h-8 w-8 items-center justify-center rounded-md bg-white/5 text-primary group-hover:bg-primary group-hover:text-black transition-colors">
-                        <span className="material-symbols-outlined text-lg">{item.icon}</span>
+                    <div className="flex h-6 w-6 items-center justify-center rounded-md bg-white/5 text-primary group-hover:bg-primary group-hover:text-black transition-colors">
+                        <span className="material-symbols-outlined text-sm">{item.icon}</span>
                     </div>
                     <span className="flex-1 text-sm font-medium">{item.label}</span>
-                    <span className="material-symbols-outlined text-gray-500 text-sm">chevron_right</span>
                 </button>
             ))}
         </div>
