@@ -1,4 +1,5 @@
 import { DiagramNode } from '../types';
+import { findOrthogonalPath } from './routing';
 
 interface Point {
   x: number;
@@ -119,7 +120,7 @@ export const calculateEdgePath = (
     fromNode: DiagramNode,
     toNode: DiagramNode,
     allNodes: DiagramNode[]
-): { points: Point[], type: 'straight' | 'curved' } => {
+): { points: Point[], type: 'straight' | 'curved' | 'orthogonal' } => {
 
     // 1. Get start and end points on the borders
     // Start point: intersection of center-to-center line with fromNode
@@ -143,27 +144,35 @@ export const calculateEdgePath = (
         }
     }
 
-    // 3. If obstacle, calculate curve
-    if (hasObstacle || fromNode.variant === 'infographic') {
-        // Simple heuristic: Curve upwards or downwards depending on something?
-        // Or perpendicular offset.
+    // 3. If obstacle, calculate orthogonal path
+    if (hasObstacle) {
+        const points = findOrthogonalPath(startCenter, endCenter, allNodes);
 
+        // Adjust start/end to be on the border?
+        // The pathfinder returns center-to-center often or near it.
+        // Let's re-clip the first and last segment.
+
+        if (points.length >= 2) {
+            points[0] = getRectIntersection(points[1], fromNode);
+            points[points.length - 1] = getRectIntersection(points[points.length - 2], toNode);
+        }
+
+        return {
+            type: 'orthogonal',
+            points
+        };
+    }
+
+    // 4. Infographic variant override (keep curved)
+    if (fromNode.variant === 'infographic') {
         const dx = endPoint.x - startPoint.x;
         const dy = endPoint.y - startPoint.y;
         const midX = (startPoint.x + endPoint.x) / 2;
         const midY = (startPoint.y + endPoint.y) / 2;
 
-        // Perpendicular vector (-dy, dx)
-        // Normalize
         const len = Math.sqrt(dx*dx + dy*dy);
-        // Avoid division by zero
         const safeLen = len === 0 ? 1 : len;
-
-        let offset = 100; // curve amount
-
-        // If we want to be smarter, we could check which side is free,
-        // but for now let's just curve "up" relative to the line or fixed.
-        // Let's try a fixed curve amount based on distance
+        let offset = 100;
 
         const controlPoint = {
             x: midX - (dy / safeLen) * offset,

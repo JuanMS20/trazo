@@ -10,6 +10,7 @@ interface RoughNodeProps {
   index: number;
   scale?: number;
   onDrag: (id: string, x: number, y: number) => void;
+  onDragStop: (id: string, x: number, y: number) => void;
   onNodeChange?: (id: string, updates: Partial<DiagramNode>) => void;
   onNodeSelect?: (id: string) => void;
   onConnectionStart?: (nodeId: string, handle: 'top' | 'right' | 'bottom' | 'left') => void;
@@ -21,6 +22,7 @@ export const RoughNode: React.FC<RoughNodeProps> = ({
   index,
   scale = 1,
   onDrag,
+  onDragStop,
   onNodeChange,
   onNodeSelect,
   onConnectionStart,
@@ -30,10 +32,31 @@ export const RoughNode: React.FC<RoughNodeProps> = ({
   const nodeRef = useRef(null);
   const [isEditing, setIsEditing] = useState(false);
   const [localText, setLocalText] = useState(node.text);
+  const textMeasureRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setLocalText(node.text);
   }, [node.text]);
+
+  // Auto-resize logic
+  useEffect(() => {
+      if (textMeasureRef.current && onNodeChange) {
+          const { scrollWidth, scrollHeight } = textMeasureRef.current;
+
+          // Calculate new dimensions with padding
+          const padding = node.variant === 'infographic' ? 40 : 32;
+          const minW = 100;
+          const minH = 60;
+
+          const newWidth = Math.max(minW, scrollWidth + padding);
+          const newHeight = Math.max(minH, scrollHeight + padding);
+
+          // Only update if dimensions changed significantly (> 5px) to avoid loops
+          if (Math.abs(newWidth - node.width) > 5 || Math.abs(newHeight - node.height) > 5) {
+               onNodeChange(node.id, { width: newWidth, height: newHeight });
+          }
+      }
+  }, [localText, node.variant, node.width, node.height]);
 
   useEffect(() => {
     if (svgRef.current) {
@@ -145,8 +168,11 @@ export const RoughNode: React.FC<RoughNodeProps> = ({
     <Draggable
         nodeRef={nodeRef}
         defaultPosition={{ x: node.x - node.width / 2, y: node.y - node.height / 2 }}
-        onStop={(e, data) => {
+        onDrag={(e, data) => {
             onDrag(node.id, data.x + node.width / 2, data.y + node.height / 2);
+        }}
+        onStop={(e, data) => {
+            onDragStop(node.id, data.x + node.width / 2, data.y + node.height / 2);
         }}
         disabled={isEditing}
         scale={scale}
@@ -184,6 +210,22 @@ export const RoughNode: React.FC<RoughNodeProps> = ({
         />
 
         {renderHandles()}
+
+        {/* Hidden measurement div */}
+        <div
+            ref={textMeasureRef}
+            className={clsx(
+                "absolute opacity-0 pointer-events-none whitespace-pre-wrap break-words",
+                isContainer ? "text-sm text-gray-500 uppercase tracking-wider text-left" : "text-lg font-caveat font-bold leading-tight text-center",
+                node.variant === 'infographic' && "text-xl font-bold"
+            )}
+            style={{
+                maxWidth: '300px', // Max width constraint
+                width: 'max-content'
+            }}
+        >
+            {localText}
+        </div>
 
         {isEditing ? (
             <textarea

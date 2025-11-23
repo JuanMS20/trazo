@@ -48,6 +48,20 @@ export const RoughEdge: React.FC<RoughEdgeProps> = ({ edge, fromNode, toNode, al
               }
           );
           svgRef.current.appendChild(path);
+      } else if (type === 'orthogonal') {
+          // Draw multiple segments
+          const options = {
+              roughness: 1.2,
+              bowing: 0.5, // Less bowing for orthogonal
+              stroke: '#94a3b8',
+              strokeWidth: 1.5
+          };
+
+          // Draw as a linear path or individual lines?
+          // rc.linearPath is good
+          const ptArr: [number, number][] = points.map(p => [p.x, p.y]);
+          const path = rc.linearPath(ptArr, options);
+          svgRef.current.appendChild(path);
       } else {
           const line = rc.line(start.x, start.y, end.x, end.y, {
             roughness: 1.2,
@@ -61,7 +75,7 @@ export const RoughEdge: React.FC<RoughEdgeProps> = ({ edge, fromNode, toNode, al
       // Draw arrow head at the end
       // Calculate angle
       const lastPoint = points[points.length - 1];
-      const prevPoint = points.length === 3 ? points[1] : points[0];
+      const prevPoint = points.length >= 2 ? points[points.length - 2] : points[0];
 
       const angle = Math.atan2(lastPoint.y - prevPoint.y, lastPoint.x - prevPoint.x);
 
