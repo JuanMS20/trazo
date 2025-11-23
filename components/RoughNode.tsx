@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import rough from 'roughjs';
 import { motion } from 'framer-motion';
 import Draggable from 'react-draggable';
@@ -9,11 +9,19 @@ interface RoughNodeProps {
   node: DiagramNode;
   index: number;
   onDrag: (id: string, x: number, y: number) => void;
+  onNodeChange?: (id: string, updates: Partial<DiagramNode>) => void;
+  onNodeSelect?: (id: string) => void;
 }
 
-export const RoughNode: React.FC<RoughNodeProps> = ({ node, index, onDrag }) => {
+export const RoughNode: React.FC<RoughNodeProps> = ({ node, index, onDrag, onNodeChange, onNodeSelect }) => {
   const svgRef = useRef<SVGSVGElement>(null);
   const nodeRef = useRef(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [localText, setLocalText] = useState(node.text);
+
+  useEffect(() => {
+    setLocalText(node.text);
+  }, [node.text]);
 
   useEffect(() => {
     if (svgRef.current) {
@@ -54,6 +62,25 @@ export const RoughNode: React.FC<RoughNodeProps> = ({ node, index, onDrag }) => 
     }
   }, [node]);
 
+  const handleDoubleClick = (e: React.MouseEvent) => {
+      e.stopPropagation(); // Prevent canvas zoom/pan
+      setIsEditing(true);
+  };
+
+  const handleBlur = () => {
+      setIsEditing(false);
+      if (localText !== node.text && onNodeChange) {
+          onNodeChange(node.id, { text: localText });
+      }
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          handleBlur();
+      }
+  };
+
   return (
     <Draggable
         nodeRef={nodeRef}
@@ -61,6 +88,7 @@ export const RoughNode: React.FC<RoughNodeProps> = ({ node, index, onDrag }) => 
         onStop={(e, data) => {
             onDrag(node.id, data.x + node.width / 2, data.y + node.height / 2);
         }}
+        disabled={isEditing}
     >
         <motion.div
         ref={nodeRef}
@@ -73,12 +101,17 @@ export const RoughNode: React.FC<RoughNodeProps> = ({ node, index, onDrag }) => 
             delay: index * 0.1,
         }}
         className={clsx(
-            "absolute flex flex-col items-center justify-center text-center p-4 cursor-grab active:cursor-grabbing",
+            "absolute flex flex-col items-center justify-center text-center p-4 cursor-grab active:cursor-grabbing group",
             // For infographic, we might want to allow text to overflow or position specifically
         )}
         style={{
             width: node.width,
             height: node.height,
+        }}
+        onDoubleClick={handleDoubleClick}
+        onClick={(e) => {
+            e.stopPropagation();
+            onNodeSelect?.(node.id);
         }}
         >
         <svg
@@ -86,7 +119,17 @@ export const RoughNode: React.FC<RoughNodeProps> = ({ node, index, onDrag }) => 
             className="absolute inset-0 w-full h-full pointer-events-none overflow-visible"
         />
 
-        {node.variant === 'infographic' ? (
+        {isEditing ? (
+            <textarea
+                className="relative z-20 bg-transparent border-none outline-none font-caveat font-bold text-center resize-none overflow-hidden w-full h-full text-lg leading-tight"
+                value={localText}
+                onChange={(e) => setLocalText(e.target.value)}
+                onBlur={handleBlur}
+                onKeyDown={handleKeyDown}
+                autoFocus
+                style={{ fontSize: 'inherit' }}
+            />
+        ) : node.variant === 'infographic' ? (
             // Infographic Content Layout
             <div className="relative z-10 flex flex-col items-center gap-2 pointer-events-none select-none">
                  {node.label && node.label !== 'Main' && (

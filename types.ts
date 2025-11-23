@@ -40,6 +40,6 @@ export interface DiagramEdge {
 export interface DiagramData {
   nodes: DiagramNode[];
   edges: DiagramEdge[];
-  type: 'flowchart' | 'mindmap' | 'cycle' | 'hierarchy' | 'infographic';
+  type: 'flowchart' | 'mindmap' | 'cycle' | 'hierarchy' | 'infographic' | 'matrix' | 'timeline';
   sourceText?: string;
 }
