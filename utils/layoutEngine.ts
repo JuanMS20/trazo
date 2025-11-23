@@ -2,12 +2,36 @@ import dagre from 'dagre';
 import * as d3 from 'd3-force';
 import { DiagramNode, DiagramEdge, DiagramData } from '../types';
 
+// Helper to estimate dimensions based on text
+const estimateDimensions = (node: DiagramNode) => {
+    if (node.width > 0 && node.height > 0) {
+        return { width: node.width, height: node.height };
+    }
+
+    // More robust estimation
+    // Assumes ~10px average char width for font size 18-24px
+    const baseWidth = 140;
+    const baseHeight = 80;
+    const charWidth = 9;
+    const lineHeight = 24;
+
+    const lines = Math.ceil(node.text.length / 20); // Wrap approx every 20 chars
+    const maxLineLength = Math.min(node.text.length, 20);
+
+    const textWidth = maxLineLength * charWidth;
+    const textHeight = lines * lineHeight;
+
+    // Add padding
+    const width = Math.max(baseWidth, textWidth + 40);
+    const height = Math.max(baseHeight, textHeight + 50 + (node.description ? 30 : 0)); // Add extra for description
+
+    return { width, height };
+};
+
 const layoutForceDirected = (nodes: DiagramNode[], edges: DiagramEdge[], type: DiagramData['type']): DiagramData => {
     // 1. Prepare nodes with dimensions
     const simNodes = nodes.map(node => {
-        const charCount = node.text.length + (node.description?.length || 0) * 0.8;
-        const width = node.width > 0 ? node.width : Math.max(160, charCount * 7);
-        const height = node.height > 0 ? node.height : Math.max(80, (charCount / 20) * 20 + 60);
+        const { width, height } = estimateDimensions(node);
         return {
             ...node,
             width,
@@ -27,10 +51,10 @@ const layoutForceDirected = (nodes: DiagramNode[], edges: DiagramEdge[], type: D
 
     // 2. Setup Simulation
     const simulation = d3.forceSimulation(simNodes as any)
-        .force("link", d3.forceLink(simLinks).id((d: any) => d.id).distance(150))
-        .force("charge", d3.forceManyBody().strength(-500)) // Repulsion
+        .force("link", d3.forceLink(simLinks).id((d: any) => d.id).distance(180))
+        .force("charge", d3.forceManyBody().strength(-800)) // Repulsion
         .force("center", d3.forceCenter(0, 0))
-        .force("collision", d3.forceCollide().radius((d: any) => Math.max(d.width, d.height) / 1.5).iterations(2))
+        .force("collision", d3.forceCollide().radius((d: any) => Math.max(d.width, d.height) / 1.2).iterations(3))
         .stop(); // Don't run automatically
 
     // 3. Run Simulation synchronously
@@ -62,7 +86,7 @@ export const layoutDiagram = (nodes: DiagramNode[], edges: DiagramEdge[], type: 
   // 2. CYCLE LAYOUT (Radial)
   if (type === 'cycle') {
       const count = nodes.length;
-      const radius = Math.max(250, count * 50); // Dynamic radius based on node count
+      const radius = Math.max(250, count * 60); // Dynamic radius based on node count
       const centerX = 0;
       const centerY = 0;
       const angleStep = (2 * Math.PI) / count;
@@ -70,10 +94,7 @@ export const layoutDiagram = (nodes: DiagramNode[], edges: DiagramEdge[], type: 
       const layoutedNodes = nodes.map((node, index) => {
           const angle = index * angleStep - Math.PI / 2; // Start from top (-90 deg)
 
-          // Heuristic for dimensions
-          const charCount = node.text.length + (node.description?.length || 0) * 0.8;
-          const width = Math.max(160, charCount * 6);
-          const height = Math.max(80, (charCount / 20) * 20 + 60);
+          const { width, height } = estimateDimensions(node);
 
           return {
               ...node,
@@ -91,16 +112,14 @@ export const layoutDiagram = (nodes: DiagramNode[], edges: DiagramEdge[], type: 
   if (type === 'infographic' || (type as any) === 'matrix') {
       // Matrix / Quadrants (2x2 or list)
       const layoutedNodes = nodes.map((node, index) => {
-          const charCount = node.text.length + (node.description?.length || 0) * 0.8;
-          const width = Math.max(180, charCount * 6);
-          const height = Math.max(120, (charCount / 20) * 20 + 60);
+          const { width, height } = estimateDimensions(node);
 
           // 2 columns
           const col = index % 2;
           const row = Math.floor(index / 2);
 
-          const colWidth = 300;
-          const rowHeight = 200;
+          const colWidth = 320;
+          const rowHeight = 220;
 
           return {
               ...node,
@@ -124,30 +143,25 @@ export const layoutDiagram = (nodes: DiagramNode[], edges: DiagramEdge[], type: 
       align: 'DL',
       marginx: 50,
       marginy: 50,
-      nodesep: isTimeline ? 50 : 80,
-      ranksep: isTimeline ? 100 : 120
+      nodesep: isTimeline ? 60 : 100,
+      ranksep: isTimeline ? 120 : 140
   });
 
   g.setDefaultEdgeLabel(function() { return {}; });
 
   // Add nodes to the graph with calculated dimensions if not present
   nodes.forEach(node => {
-    const charCount = node.text.length + (node.description?.length || 0) * 0.8;
-    const estimatedWidth = Math.max(160, charCount * 7);
-    const estimatedHeight = Math.max(80, (charCount / 20) * 20 + 60);
-
-    const finalWidth = node.width > 0 ? node.width : estimatedWidth;
-    const finalHeight = node.height > 0 ? node.height : estimatedHeight;
+    const { width, height } = estimateDimensions(node);
 
     g.setNode(node.id, {
         label: node.text,
-        width: finalWidth,
-        height: finalHeight
+        width,
+        height
     });
 
     // Update the node object reference for later
-    node.width = finalWidth;
-    node.height = finalHeight;
+    node.width = width;
+    node.height = height;
   });
 
   edges.forEach(edge => {

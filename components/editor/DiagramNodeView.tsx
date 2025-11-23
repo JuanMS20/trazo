@@ -5,6 +5,7 @@ import { DiagramData, DiagramNode } from '../../types';
 import * as htmlToImage from 'html-to-image';
 import download from 'downloadjs';
 import { generateSvgString } from '../../utils/svgGenerator';
+import { v4 as uuidv4 } from 'uuid';
 
 export const DiagramNodeView: React.FC<NodeViewProps> = ({ node, updateAttributes, selected }) => {
   const data = node.attrs.data as DiagramData | null;
@@ -60,6 +61,21 @@ export const DiagramNodeView: React.FC<NodeViewProps> = ({ node, updateAttribute
     });
   };
 
+  const handleEdgeCreate = (fromId: string, toId: string) => {
+      if (!data) return;
+      const newEdge = {
+          id: uuidv4(),
+          fromId,
+          toId
+      };
+      updateAttributes({
+          data: {
+              ...data,
+              edges: [...data.edges, newEdge]
+          }
+      });
+  };
+
   const handleExport = async (format: 'png' | 'svg') => {
       if (!containerRef.current) return;
 
@@ -107,6 +123,7 @@ export const DiagramNodeView: React.FC<NodeViewProps> = ({ node, updateAttribute
             onNodeDrag={handleNodeDrag}
             onNodeChange={handleNodeChange}
             onNodeSelect={handleNodeSelect}
+            onEdgeCreate={handleEdgeCreate}
         />
 
         {/* Color Picker Menu */}
