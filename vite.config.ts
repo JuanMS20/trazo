@@ -11,8 +11,10 @@ export default defineConfig(({ mode }) => {
       },
       plugins: [react()],
       define: {
-        'process.env.API_KEY': JSON.stringify(env.GEMINI_API_KEY),
-        'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY)
+        // Exponemos las variables de Chutes.ai
+        'process.env.CHUTES_API_KEY': JSON.stringify(env.CHUTES_API_KEY),
+        'process.env.CHUTES_API_URL': JSON.stringify(env.CHUTES_API_URL),
+        'process.env.CHUTES_MODEL': JSON.stringify(env.CHUTES_MODEL),
       },
       resolve: {
         alias: {
