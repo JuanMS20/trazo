@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useState } from 'react';
-import { DiagramData } from '../types';
+import { DiagramData, DiagramNode } from '../types';
 import { RoughNode } from './RoughNode';
 import { RoughEdge } from './RoughEdge';
 import { motion } from 'framer-motion';
@@ -7,9 +7,11 @@ import { motion } from 'framer-motion';
 interface DiagramCanvasProps {
   data: DiagramData | null;
   onNodeDrag: (id: string, x: number, y: number) => void;
+  onNodeChange?: (id: string, updates: Partial<DiagramNode>) => void;
+  onNodeSelect?: (id: string) => void;
 }
 
-export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({ data, onNodeDrag }) => {
+export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({ data, onNodeDrag, onNodeChange, onNodeSelect }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
 
@@ -95,6 +97,8 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({ data, onNodeDrag }
                 node={node}
                 index={i}
                 onDrag={onNodeDrag}
+                onNodeChange={onNodeChange}
+                onNodeSelect={onNodeSelect}
             />
         ))}
       </motion.div>

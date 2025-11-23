@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { NodeViewWrapper, NodeViewProps } from '@tiptap/react';
 import { DiagramCanvas } from '../DiagramCanvas';
-import { DiagramData } from '../../types';
+import { DiagramData, DiagramNode } from '../../types';
 import * as htmlToImage from 'html-to-image';
 import download from 'downloadjs';
 
@@ -9,6 +9,7 @@ export const DiagramNodeView: React.FC<NodeViewProps> = ({ node, updateAttribute
   const data = node.attrs.data as DiagramData | null;
   const containerRef = useRef<HTMLDivElement>(null);
   const [isHovering, setIsHovering] = useState(false);
+  const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
   const containerHeight = useMemo(() => {
     if (!data || !data.nodes || data.nodes.length === 0) return 400; // default height
@@ -24,6 +25,24 @@ export const DiagramNodeView: React.FC<NodeViewProps> = ({ node, updateAttribute
     const height = maxY - minY;
     return Math.max(height + 150, 300); // Add padding, min height 300
   }, [data]);
+
+  const handleNodeChange = (id: string, updates: Partial<DiagramNode>) => {
+      if (!data) return;
+      const updatedNodes = data.nodes.map(n => n.id === id ? { ...n, ...updates } : n);
+      updateAttributes({
+          data: { ...data, nodes: updatedNodes }
+      });
+  };
+
+  const handleNodeSelect = (id: string) => {
+      setSelectedNodeId(id);
+  };
+
+  const handleColorChange = (color: string) => {
+      if (!selectedNodeId || !data) return;
+      handleNodeChange(selectedNodeId, { color });
+      setSelectedNodeId(null); // Close menu after selection
+  };
 
   const handleNodeDrag = (id: string, x: number, y: number) => {
     if (!data) return;
@@ -75,8 +94,41 @@ export const DiagramNodeView: React.FC<NodeViewProps> = ({ node, updateAttribute
       <div
         ref={containerRef}
         className={`w-full h-full bg-[#FDFBF7] rounded-xl border transition-all duration-200 ${selected ? 'border-primary ring-2 ring-primary/20 shadow-md' : 'border-transparent hover:border-gray-200'}`}
+        onClick={() => setSelectedNodeId(null)} // Deselect when clicking background
       >
-        <DiagramCanvas data={data} onNodeDrag={handleNodeDrag} />
+        <DiagramCanvas
+            data={data}
+            onNodeDrag={handleNodeDrag}
+            onNodeChange={handleNodeChange}
+            onNodeSelect={handleNodeSelect}
+        />
+
+        {/* Color Picker Menu */}
+        {selectedNodeId && (
+            <div
+                className="absolute bg-white rounded-full shadow-lg border border-gray-200 p-1.5 flex gap-2 z-50 animate-in fade-in zoom-in-95 duration-100"
+                style={{
+                    // Position relative to selected node?
+                    // Hard to get screen coords here easily without ref forwarding galore.
+                    // Let's position it central top or top-left of the canvas for now, or near the mouse?
+                    // Actually, let's just center it at the top of the canvas for simplicity and reliability
+                    top: 16,
+                    left: '50%',
+                    transform: 'translateX(-50%)'
+                }}
+                onClick={(e) => e.stopPropagation()}
+            >
+                {['#ffffff', '#fef08a', '#bae6fd', '#fecaca'].map(c => (
+                    <button
+                        key={c}
+                        onClick={() => handleColorChange(c)}
+                        className="w-6 h-6 rounded-full border border-gray-300 hover:scale-110 transition-transform"
+                        style={{ backgroundColor: c }}
+                        title={c}
+                    />
+                ))}
+            </div>
+        )}
 
         {/* Floating Export Menu */}
         <div className={`absolute top-2 right-2 flex gap-2 transition-opacity duration-200 ${isHovering || selected ? 'opacity-100' : 'opacity-0'}`}>
