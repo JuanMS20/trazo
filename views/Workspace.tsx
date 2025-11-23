@@ -2,7 +2,8 @@ import React, { useState, useRef } from 'react';
 import { ViewState, DiagramData } from '../types';
 import { ExportModal } from '../components/ExportModal';
 import { DiagramCanvas } from '../components/DiagramCanvas';
-import { generateDiagramFromText } from '../utils/diagramGenerator';
+import { AiAgent } from '../utils/aiAgent';
+import { GenerationLoader } from '../components/GenerationLoader';
 
 interface WorkspaceProps {
   onNavigate: (view: ViewState) => void;
@@ -18,6 +19,10 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [diagramData, setDiagramData] = useState<DiagramData | null>(null);
   const [selectedText, setSelectedText] = useState<string>('');
+
+  // Agent state
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [processStep, setProcessStep] = useState('');
 
   // Simulate context menu trigger
   const handleTextClick = (e: React.MouseEvent) => {
@@ -36,12 +41,31 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
     }
   };
 
+  const runAgentPipeline = async (text: string) => {
+    setIsProcessing(true);
+    setShowContextMenu(false);
+    setProcessStep("Iniciando Agentes...");
+
+    try {
+        const result = await AiAgent.analyzeAndGenerate(text, (step) => {
+            setProcessStep(step);
+        });
+
+        setDiagramData({
+            ...result,
+            type: 'flowchart'
+        });
+    } catch (error) {
+        console.error("Agent Error:", error);
+        alert("Error al generar el diagrama. Intenta de nuevo.");
+    } finally {
+        setIsProcessing(false);
+    }
+  };
+
   const handleBoltClick = (e: React.MouseEvent) => {
       e.stopPropagation();
-      // Generate a flowchart by default if bolt is clicked
-      const data = generateDiagramFromText(selectedText || "Una vez que entendemos el problema...", 'flowchart');
-      setDiagramData(data);
-      setShowContextMenu(false);
+      runAgentPipeline(selectedText || "Una vez que entendemos el problema...");
   };
 
   const handleToolChange = (tool: ToolType) => {
@@ -53,14 +77,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
   };
 
   const handleContextOptionClick = (label: string) => {
-    let type: DiagramData['type'] = 'flowchart';
-    if (label === 'Mapa Mental') type = 'mindmap';
-    if (label === 'Ciclo') type = 'cycle';
-    if (label === 'Jerarquía') type = 'hierarchy';
-
-    const data = generateDiagramFromText(selectedText || "Texto de ejemplo", type);
-    setDiagramData(data);
-    setShowContextMenu(false);
+    runAgentPipeline(selectedText || "Texto de ejemplo");
   };
 
   return (
@@ -131,6 +148,10 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
 
         {/* Right Panel: Canvas */}
         <div className="flex-1 bg-[#FDFBF7] relative overflow-hidden" style={{ cursor: activeTool === 'pan' ? 'grab' : 'default' }}>
+
+            {/* Processing Loader Overlay */}
+            {isProcessing && <GenerationLoader step={processStep} />}
+
             {/* Dot Grid Background */}
             <div
                 className="absolute inset-0 transition-transform duration-200 pointer-events-none"
@@ -171,7 +192,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
       </div>
 
       {/* Context Menu Popover (Fixed position for demo) */}
-      {showContextMenu && (
+      {showContextMenu && !isProcessing && (
         <div 
             className="absolute z-50 w-72 rounded-xl bg-[#212121] text-white shadow-2xl p-2 flex flex-col gap-1 animate-[fadeIn_0.2s_ease-out]"
             style={{ top: '40%', left: '360px' }} // Positioned relative to the mock layout
