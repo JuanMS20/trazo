@@ -81,7 +81,7 @@ const getIconForText = (text: string): string | undefined => {
  */
 export class AiAgent {
 
-  static async analyzeAndGenerate(text: string, progressCallback: (step: string) => void): Promise<{ nodes: DiagramNode[], edges: DiagramEdge[], type?: string }> {
+  static async analyzeAndGenerate(text: string, progressCallback: (step: string) => void, forceType?: string): Promise<{ nodes: DiagramNode[], edges: DiagramEdge[], type?: string }> {
 
     // Step 1: Semantic Analysis
     progressCallback("🤖 Analizando semántica...");
@@ -90,39 +90,70 @@ export class AiAgent {
     const lowerText = text.toLowerCase().trim();
     const sentences = text.split(/[.!?\n]/).filter(s => s.trim().length > 3);
 
-    // Check for "Creative Expansion Mode" (Short text < 50 chars)
-    if (text.length < 50 && !text.includes('\n')) {
+    // Determine Pattern: ForceType takes precedence, else heuristics
+    let pattern = 'sequence';
+
+    if (forceType) {
+        // Map forceType to pattern logic
+        if (forceType === 'flowchart') pattern = 'sequence'; // Sequence/Flowchart same logic here
+        else if (forceType === 'tree') pattern = 'hierarchy'; // tree map to hierarchy logic
+        else pattern = forceType; // 'cycle', 'comparison', 'infographic', 'hierarchy'
+    } else {
+        // Heuristics
+        if (text.length < 50 && !text.includes('\n')) pattern = 'infographic'; // Heuristic for infographic
+        else if (COMPARISON_KEYWORDS.some(k => lowerText.includes(k))) pattern = 'comparison';
+        else if (CYCLE_KEYWORDS.some(k => lowerText.includes(k))) pattern = 'cycle';
+        else if (HIERARCHY_KEYWORDS.some(k => lowerText.includes(k)) || sentences.some(s => LIST_MARKERS.some(m => s.trim().startsWith(m)))) pattern = 'hierarchy';
+    }
+
+    const nodes: DiagramNode[] = [];
+    const edges: DiagramEdge[] = [];
+
+    const createNode = (id: string, text: string, type: DiagramNode['type'] = 'rectangle', color = 'white', width = 150, height = 70): DiagramNode => {
+        return {
+            id,
+            text: text.substring(0, 40) + (text.length > 40 ? '...' : ''),
+            x: 0, y: 0,
+            width, height,
+            type, color,
+            icon: getIconForText(text)
+        };
+    };
+
+    if (pattern === 'infographic') {
         progressCallback("✨ Activando Modo Creativo...");
-        await sleep(800);
+        if (!forceType) await sleep(800); // Only sleep if auto-detected
 
-        // Check knowledge base or generate generic
-        let data = { title: `Análisis Profundo de: ${text}`, nodes: [{ title: 'Concepto Clave 1', desc: 'Descripción detallada del punto.' }, { title: 'Concepto Clave 2', desc: 'Impacto relevante en el contexto.' }] };
+        let data = { title: `Análisis de: ${text.substring(0,20)}...`, nodes: [{ title: 'Concepto 1', desc: 'Descripción clave.' }, { title: 'Concepto 2', desc: 'Impacto relevante.' }, { title: 'Concepto 3', desc: 'Conclusión.' }] };
 
+        // If text matches knowledge base, use it. Even if forced, we try to use KB if text matches keys.
         for (const key in KNOWLEDGE_BASE) {
             if (lowerText.includes(key)) {
                 data = KNOWLEDGE_BASE[key];
                 break;
             }
         }
+        // If forced infographic on long text? We might need to summarize.
+        // For simulation: We just use the first few sentences as points if not in KB.
+        if (text.length >= 50 && !KNOWLEDGE_BASE[Object.keys(KNOWLEDGE_BASE).find(k => lowerText.includes(k)) || '']) {
+             data = {
+                 title: "Resumen Visual",
+                 nodes: sentences.slice(0, 4).map(s => ({ title: s.substring(0, 20), desc: s.substring(0, 50) }))
+             };
+        }
 
-        // Build Infographic Structure
-        const nodes: DiagramNode[] = [];
-        const edges: DiagramEdge[] = [];
-
-        // Central Node (Bottom/Center)
         const rootId = 'root-infographic';
         nodes.push({
             id: rootId,
             text: data.title,
-            x: 400, y: 500, // Starting pos, will be laid out
+            x: 400, y: 500,
             width: 220, height: 220,
             type: 'circle',
-            color: '#FDE68A', // Gold
+            color: '#FDE68A',
             variant: 'infographic',
             label: 'Main'
         });
 
-        // Branches
         data.nodes.forEach((item, i) => {
             const id = `info-node-${i}`;
             nodes.push({
@@ -136,26 +167,15 @@ export class AiAgent {
                 color: 'white',
                 variant: 'infographic'
             });
-
-            edges.push({
-                id: `edge-${i}`,
-                fromId: rootId,
-                toId: id
-            });
+            edges.push({ id: `edge-${i}`, fromId: rootId, toId: id });
         });
 
-        // Manual Layout for Infographic (Star/Tree up)
-        // Root at 400, 500.
-        // Children in an arc above.
+        // Radial Layout
         const centerX = 400;
         const centerY = 500;
         const radius = 300;
-        const startAngle = Math.PI; // 180 deg (left)
-        const endAngle = 2 * Math.PI; // 360 deg (right)
-        // Actually better: from 5/4 PI to 7/4 PI (top left to top right)
-        // Let's spread them from 210 degrees to 330 degrees.
-        const totalAngle = 120 * (Math.PI / 180);
-        const startRad = 210 * (Math.PI / 180);
+        const totalAngle = 140 * (Math.PI / 180); // Slightly wider arc
+        const startRad = 200 * (Math.PI / 180);
 
         nodes.forEach((n) => {
             if (n.id === rootId) {
@@ -164,42 +184,16 @@ export class AiAgent {
             } else {
                 const index = parseInt(n.label || '0') - 1;
                 const count = data.nodes.length;
-                // Spread evenly
                 const angleStep = count > 1 ? totalAngle / (count - 1) : 0;
                 const angle = startRad + (index * angleStep);
-
                 n.x = centerX + radius * Math.cos(angle);
                 n.y = centerY + radius * Math.sin(angle);
             }
         });
 
-        progressCallback("🎨 Diseñando Infografía...");
-        await sleep(600);
-
         return { nodes, edges, type: 'infographic' };
-    }
 
-    // Standard Logic for Longer Text
-    let pattern = 'sequence';
-    if (COMPARISON_KEYWORDS.some(k => lowerText.includes(k))) pattern = 'comparison';
-    else if (CYCLE_KEYWORDS.some(k => lowerText.includes(k))) pattern = 'cycle';
-    else if (HIERARCHY_KEYWORDS.some(k => lowerText.includes(k)) || sentences.some(s => LIST_MARKERS.some(m => s.trim().startsWith(m)))) pattern = 'hierarchy';
-
-    const nodes: DiagramNode[] = [];
-    const edges: DiagramEdge[] = [];
-
-    const createNode = (id: string, text: string, type: DiagramNode['type'] = 'rectangle', color = 'white', width = 150, height = 70): DiagramNode => {
-        return {
-            id,
-            text: text.substring(0, 40) + (text.length > 40 ? '...' : ''),
-            x: 0, y: 0,
-            width, height,
-            type, color,
-            icon: getIconForText(text) // Add icon heuristic
-        };
-    };
-
-    if (pattern === 'comparison') {
+    } else if (pattern === 'comparison') {
         const half = Math.ceil(sentences.length / 2);
         const groupA = sentences.slice(0, half);
         const groupB = sentences.slice(half);
@@ -220,10 +214,7 @@ export class AiAgent {
         sentences.forEach((s, i) => {
             const id = `node-${i}`;
             nodes.push(createNode(id, s.trim(), 'circle', '#E9D5FF', 140, 140));
-
-            if (i > 0) {
-                edges.push({ id: `edge-${i}`, fromId: `node-${i-1}`, toId: id });
-            }
+            if (i > 0) edges.push({ id: `edge-${i}`, fromId: `node-${i-1}`, toId: id });
         });
         if (nodes.length > 1) {
             edges.push({ id: 'edge-cycle', fromId: nodes[nodes.length-1].id, toId: nodes[0].id });
@@ -245,7 +236,7 @@ export class AiAgent {
         });
 
     } else {
-        // Sequence
+        // Sequence / Timeline
         sentences.forEach((s, i) => {
             const cleanText = s.trim();
             const id = `node-${i}`;
@@ -264,12 +255,15 @@ export class AiAgent {
         });
     }
 
-    // Step 2: Structural Optimization (Layout)
-    // Only run dagre if not infographic (infographic has manual layout above)
+    // Step 2: Structural Optimization (Layout) for standard types
     progressCallback("📐 Calculando geometría...");
     await sleep(800);
 
+    // Use dagre for layout, but check if timeline needs horizontal
     const layoutData = layoutDiagram(nodes, edges);
+    // Dagre default in layoutEngine is Top-Bottom. Timeline might want Left-Right.
+    // For now, sticking to one layout engine config for simplicity unless forceType is timeline?
+    // Let's keep it simple.
 
     // Step 3: Final Polish
     progressCallback("🎨 Renderizando estilo 'Napkin'...");
