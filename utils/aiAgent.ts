@@ -107,13 +107,14 @@ export class AiAgent {
       1. RESPONDE ÚNICAMENTE CON UN JSON VÁLIDO. No añadas texto antes ni después. No uses bloques de código markdown (\`\`\`json).
       2. Estructura JSON requerida:
          {
-           "nodes": [ { "id": "string", "text": "string (max 6 palabras)", "type": "rectangle|circle|diamond", "variant": "default|infographic" } ],
+           "nodes": [ { "id": "string", "text": "string (max 6 palabras)", "type": "rectangle|circle|diamond|container", "variant": "default|infographic" } ],
            "edges": [ { "id": "string", "fromId": "string", "toId": "string", "label": "string (opcional)" } ]
          }
       3. Lógica de Diseño General:
          - Usa 'diamond' para decisiones o preguntas clave.
          - Usa 'circle' para conceptos centrales, inicio o fin.
          - Usa 'rectangle' para pasos de proceso o información.
+         - Usa 'container' para agrupar conceptos relacionados. Los nodos contenedores deben ser más grandes y englobar visualmente a otros nodos.
          - Si es 'Comparison', asegúrate de crear nodos que representen las categorías a comparar.
       4. Simplifica el texto de los nodos para que sea visualmente digerible.
     `;

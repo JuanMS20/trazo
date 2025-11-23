@@ -31,20 +31,20 @@ export const RoughNode: React.FC<RoughNodeProps> = ({ node, index, onDrag, onNod
         svgRef.current.removeChild(svgRef.current.firstChild);
       }
 
-      const options = {
-        roughness: node.variant === 'infographic' ? 1.5 : 2.5, // Cleaner for infographic
+      // Visual options
+      const options: any = {
+        roughness: node.variant === 'infographic' ? 1.5 : 2.5,
         bowing: node.variant === 'infographic' ? 0.5 : 2,
         fill: node.color || 'white',
         fillStyle: 'hachure',
         fillWeight: 1,
         hachureGap: 4,
-        stroke: node.variant === 'infographic' ? '#ffffff' : '#1e293b', // White stroke for dark bg look or contrasting? Let's stick to dark stroke usually, but infographic might look cool with white on dark?
-        // Actually, canvas is light. So dark stroke is best.
+        stroke: '#1e293b',
         strokeWidth: node.variant === 'infographic' ? 3 : 2,
         disableMultiStroke: node.variant === 'infographic'
       };
 
-      // Override stroke for infographic to be cleaner/thicker
+      // Specific overrides
       if (node.variant === 'infographic') {
           options.stroke = '#1e293b';
           options.roughness = 0.5;
@@ -54,16 +54,29 @@ export const RoughNode: React.FC<RoughNodeProps> = ({ node, index, onDrag, onNod
       const w = node.width;
       const h = node.height;
 
-      if (node.type === 'circle' || node.type === 'ellipse') {
-        rc.ellipse(w / 2, h / 2, w - 4, h - 4, options);
+      // Handle Node Types
+      if (node.type === 'container') {
+          // Container: Dashed, transparent, light stroke
+          options.fill = 'transparent';
+          options.fillStyle = 'solid'; // No hatch
+          options.strokeLineDash = [5, 5];
+          options.stroke = '#94a3b8'; // lighter grey
+          options.strokeWidth = 2;
+          rc.rectangle(2, 2, w - 4, h - 4, options);
+      } else if (node.type === 'circle' || node.type === 'ellipse') {
+          rc.ellipse(w / 2, h / 2, w - 4, h - 4, options);
+      } else if (node.type === 'diamond') {
+          // RoughJS has polygon, but no direct diamond primitive, simulate with polygon
+          rc.polygon([[w/2, 2], [w-2, h/2], [w/2, h-2], [2, h/2]], options);
       } else {
-        rc.rectangle(2, 2, w - 4, h - 4, options);
+          // Default rectangle
+          rc.rectangle(2, 2, w - 4, h - 4, options);
       }
     }
   }, [node]);
 
   const handleDoubleClick = (e: React.MouseEvent) => {
-      e.stopPropagation(); // Prevent canvas zoom/pan
+      e.stopPropagation();
       setIsEditing(true);
   };
 
@@ -80,6 +93,9 @@ export const RoughNode: React.FC<RoughNodeProps> = ({ node, index, onDrag, onNod
           handleBlur();
       }
   };
+
+  // Determine container specific styles
+  const isContainer = node.type === 'container';
 
   return (
     <Draggable
@@ -101,12 +117,14 @@ export const RoughNode: React.FC<RoughNodeProps> = ({ node, index, onDrag, onNod
             delay: index * 0.1,
         }}
         className={clsx(
-            "absolute flex flex-col items-center justify-center text-center p-4 cursor-grab active:cursor-grabbing group",
-            // For infographic, we might want to allow text to overflow or position specifically
+            "absolute p-4 cursor-grab active:cursor-grabbing group",
+            isContainer ? "flex items-start justify-start" : "flex flex-col items-center justify-center text-center",
+            // Lower z-index for container visually (handled by parent usually, but we can try here)
         )}
         style={{
             width: node.width,
             height: node.height,
+            zIndex: isContainer ? 0 : 10 // Ensure containers stay behind
         }}
         onDoubleClick={handleDoubleClick}
         onClick={(e) => {
@@ -121,7 +139,10 @@ export const RoughNode: React.FC<RoughNodeProps> = ({ node, index, onDrag, onNod
 
         {isEditing ? (
             <textarea
-                className="relative z-20 bg-transparent border-none outline-none font-caveat font-bold text-center resize-none overflow-hidden w-full h-full text-lg leading-tight"
+                className={clsx(
+                    "relative z-20 bg-transparent border-none outline-none font-caveat font-bold resize-none overflow-hidden leading-tight",
+                    isContainer ? "text-left w-full h-8 text-gray-500" : "text-center w-full h-full text-lg"
+                )}
                 value={localText}
                 onChange={(e) => setLocalText(e.target.value)}
                 onBlur={handleBlur}
@@ -159,7 +180,10 @@ export const RoughNode: React.FC<RoughNodeProps> = ({ node, index, onDrag, onNod
                         {node.icon}
                     </span>
                 )}
-                <span className="relative z-10 text-lg font-caveat font-bold leading-tight pointer-events-none select-none text-off-black">
+                <span className={clsx(
+                    "relative z-10 font-caveat font-bold leading-tight pointer-events-none select-none text-off-black",
+                    isContainer ? "text-sm text-gray-500 uppercase tracking-wider" : "text-lg"
+                )}>
                     {node.text}
                 </span>
             </>
