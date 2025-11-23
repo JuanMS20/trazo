@@ -15,7 +15,7 @@ type ToolType = 'pan' | 'edit' | 'zoom';
 export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [showContextMenu, setShowContextMenu] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(false); // New state for suggestions
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState({ top: 0, left: 0 });
   const [activeTool, setActiveTool] = useState<ToolType>('edit');
   const [zoomLevel, setZoomLevel] = useState(1);
@@ -70,16 +70,26 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
 
       if (triggerEvent && 'clientY' in triggerEvent.nativeEvent) {
           const mouseEvent = triggerEvent as React.MouseEvent;
-          top = mouseEvent.clientY + 10;
-          left = mouseEvent.clientX + 10;
+          // Position context menu relative to viewport, but we handle it carefully
+          // Since we are changing layout, let's keep it simple:
+          // We will position it absolute to the window for now, or relative to the container.
+          // However, the textarea is in a scrollable div.
+          // Let's use the mouse position directly.
+          top = mouseEvent.clientY;
+          left = mouseEvent.clientX;
       } else {
-          const rect = textarea.getBoundingClientRect();
-          top = rect.top + rect.height / 2;
-          left = rect.left + rect.width / 2;
+          // If selected via keyboard, this is harder to get exact coords without extra libs.
+          // Fallback to center or generic position?
+          // For now, let's just not show the floating button on keyboard select to avoid glitches,
+          // or show it near the mouse if available?
+          // Actually, let's just skip it for now or assume mouse usage for this prototype feature.
+          return;
       }
 
       setContextMenuPosition({ top, left });
       setShowContextMenu(true);
+    } else {
+        setShowContextMenu(false);
     }
   };
 
@@ -88,11 +98,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
   };
 
   const handleKeyUp = (e: React.KeyboardEvent) => {
-      handleSelection();
-  };
-
-  const handleSelect = (e: React.SyntheticEvent) => {
-      handleSelection(e);
+     // Optional: handle keyboard selection
   };
 
   const runAgentPipeline = async (text: string, forceType?: string) => {
@@ -103,8 +109,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
     setDiagramData(null);
 
     try {
-        // Also open Suggestions Panel on first run
-        if (!forceType) setShowSuggestions(true);
+        // Ensure suggestions are open if we are generating
+        if (!forceType && !showSuggestions) setShowSuggestions(true);
 
         const result = await AiAgent.analyzeAndGenerate(text, (step) => {
             setProcessStep(step);
@@ -124,6 +130,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
 
   const handleBoltClick = (e: React.MouseEvent) => {
       e.stopPropagation();
+      e.preventDefault(); // Prevent text deselection if possible
       runAgentPipeline(selectedText || editorContent || "Texto de ejemplo");
   };
 
@@ -133,10 +140,6 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
         setZoomLevel(prev => Math.min(prev + 0.1, 2));
         setTimeout(() => setActiveTool('edit'), 500);
     }
-  };
-
-  const handleContextOptionClick = (label: string) => {
-    runAgentPipeline(selectedText || editorContent || "Texto de ejemplo");
   };
 
   const handleNodeDrag = (id: string, x: number, y: number) => {
@@ -150,28 +153,31 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
   };
 
   return (
-    <div className="flex h-screen w-full flex-col bg-background-light overflow-hidden">
-      <header className="h-16 px-6 flex items-center justify-between bg-transparent z-20">
+    <div className="flex h-screen w-full flex-col bg-background-light overflow-hidden text-slate-800">
+      <header className="h-14 px-4 border-b border-gray-200 flex items-center justify-between bg-white z-20 shrink-0">
         <div className="flex items-center gap-4">
-           <button onClick={() => onNavigate(ViewState.DASHBOARD)} className="p-2 rounded-full hover:bg-black/5 transition-colors">
-             <span className="material-symbols-outlined text-off-black">grid_view</span>
+           <button onClick={() => onNavigate(ViewState.DASHBOARD)} className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600">
+             <span className="material-symbols-outlined text-[20px]">grid_view</span>
            </button>
-           <h2 className="font-handwritten text-2xl font-bold text-off-black">Untitled Document</h2>
+           <h2 className="font-serif text-xl font-medium text-gray-800">Untitled Document</h2>
         </div>
         
-        <div className="flex gap-4">
-            {/* Toggle Suggestions manually if needed */}
+        <div className="flex gap-3 items-center">
+             <div className="h-6 w-px bg-gray-300 mx-2"></div>
+
+             {/* Toggle Suggestions */}
             <button
                 onClick={() => setShowSuggestions(!showSuggestions)}
-                className={`p-2 rounded-full transition-colors ${showSuggestions ? 'bg-primary/20 text-primary' : 'hover:bg-black/5 text-gray-500'}`}
+                className={`p-2 rounded-lg transition-all flex items-center gap-2 ${showSuggestions ? 'bg-primary/10 text-primary ring-1 ring-primary/20' : 'hover:bg-gray-100 text-gray-600'}`}
                 title="AI Suggestions"
             >
-                <span className="material-symbols-outlined">auto_awesome</span>
+                <span className="material-symbols-outlined text-[20px]">auto_awesome</span>
+                <span className="text-sm font-medium hidden md:inline">Visuals</span>
             </button>
 
             <button
                 onClick={() => setIsExportModalOpen(true)}
-                className="bg-primary text-off-black font-bold px-6 py-2 rounded-[45%_55%_50%_50%/55%_45%_55%_45%] -rotate-1 hover:rotate-0 transition-transform shadow-sm hover:shadow-md"
+                className="bg-black hover:bg-gray-800 text-white font-medium px-4 py-1.5 rounded-lg text-sm transition-colors shadow-sm"
             >
                 Exportar
             </button>
@@ -179,7 +185,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
       </header>
 
       <div className="flex flex-1 overflow-hidden relative">
-        {/* Suggestions Panel Layer */}
+
+        {/* Sidebar: Suggestions */}
         <SuggestionsPanel
             isOpen={showSuggestions}
             onClose={() => setShowSuggestions(false)}
@@ -187,98 +194,96 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
             onSelectType={(type) => runAgentPipeline(selectedText || editorContent || "Texto de ejemplo", type)}
         />
 
-        {/* Left Panel: Editor */}
-        <div className="w-1/3 min-w-[400px] bg-white h-full border-r border-gray-100 shadow-lg z-10 flex flex-col transition-all duration-300" style={{ marginLeft: showSuggestions ? '18rem' : '0' }}>
-            <div className="flex-1 p-8 pt-8 overflow-y-auto relative">
+        {/* Editor Column */}
+        <div className="w-[400px] xl:w-[500px] bg-white h-full border-r border-gray-200 shadow-sm flex flex-col shrink-0 z-10 transition-all duration-300">
+            <div className="flex-1 overflow-y-auto relative">
                 <textarea
                     ref={textareaRef}
-                    className="w-full h-full resize-none outline-none font-serif text-lg leading-relaxed text-gray-700 placeholder:text-gray-300"
-                    placeholder="Escribe aquí tu historia, ideas o notas. Selecciona el texto para visualizar..."
+                    className="w-full h-full p-8 resize-none outline-none font-serif text-lg leading-relaxed text-gray-700 placeholder:text-gray-300 bg-transparent"
+                    placeholder="Empieza a escribir tu historia..."
                     value={editorContent}
                     onChange={(e) => setEditorContent(e.target.value)}
-                    onSelect={handleSelect}
                     onMouseUp={handleMouseUp}
                     onKeyUp={handleKeyUp}
                 />
-                
-                {showContextMenu && (
-                    <div
-                        className="absolute z-20 animate-bounce-in"
-                        style={{ top: contextMenuPosition.top - 60, left: contextMenuPosition.left }}
-                    >
-                         <button
-                            onClick={handleBoltClick}
-                            className="flex h-12 w-12 items-center justify-center rounded-full bg-primary text-off-black shadow-lg hover:scale-110 transition-transform"
-                            title="Generar Visual"
-                        >
-                            <span className="material-symbols-outlined text-2xl">bolt</span>
-                        </button>
-                    </div>
-                )}
+            </div>
+
+            {/* Status Bar for Editor */}
+            <div className="h-8 border-t border-gray-100 px-4 flex items-center justify-between text-xs text-gray-400 bg-gray-50/50">
+                <span>{editorContent.length} caracteres</span>
+                <span>Guardado</span>
             </div>
         </div>
 
-        {/* Right Panel: Canvas */}
+        {/* Canvas Column */}
         <div
-            ref={canvasRef}
-            className="flex-1 bg-[#FDFBF7] relative overflow-hidden"
-            style={{ cursor: activeTool === 'pan' ? 'grab' : 'default' }}
+            className="flex-1 bg-[#FDFBF7] relative overflow-hidden flex flex-col"
         >
-            {isProcessing && <GenerationLoader step={processStep} />}
-
-            <div
-                className="absolute inset-0 transition-transform duration-200 pointer-events-none"
-                style={{
-                    backgroundImage: 'radial-gradient(#d1d5db 1px, transparent 1px)',
-                    backgroundSize: '24px 24px',
-                    transform: `scale(${zoomLevel})`
-                }}
-            ></div>
-
-            <div className="absolute inset-0 w-full h-full">
-                 <DiagramCanvas data={diagramData} onNodeDrag={handleNodeDrag} />
-            </div>
-
-            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 bg-white border border-gray-200 shadow-xl rounded-[20px_20px_0_0] px-6 py-3 flex gap-6 z-20">
+            {/* Toolbar within Canvas Area */}
+             <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur border border-gray-200 shadow-sm rounded-full px-4 py-2 flex gap-4 z-20">
                 <button
                     onClick={() => handleToolChange('pan')}
-                    className={`p-2 rounded-full transition-colors ${activeTool === 'pan' ? 'text-off-black bg-gray-100 ring-2 ring-gray-300' : 'text-gray-500 hover:text-off-black hover:bg-gray-100'}`}
+                    className={`p-1.5 rounded-full transition-colors ${activeTool === 'pan' ? 'bg-black text-white' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}
+                    title="Mover lienzo"
                 >
-                    <span className="material-symbols-outlined">pan_tool</span>
+                    <span className="material-symbols-outlined text-[20px]">pan_tool</span>
                 </button>
                 <button
                     onClick={() => handleToolChange('edit')}
-                    className={`p-2 rounded-full transition-colors ${activeTool === 'edit' ? 'text-off-black bg-gray-100 ring-2 ring-gray-300' : 'text-gray-500 hover:text-off-black hover:bg-gray-100'}`}
+                    className={`p-1.5 rounded-full transition-colors ${activeTool === 'edit' ? 'bg-black text-white' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}
+                    title="Seleccionar nodos"
                 >
-                    <span className="material-symbols-outlined">edit</span>
+                    <span className="material-symbols-outlined text-[20px]">edit</span>
                 </button>
-                <button
+                <div className="w-px bg-gray-300 h-6 self-center"></div>
+                 <button
                     onClick={() => handleToolChange('zoom')}
-                    className={`p-2 rounded-full transition-colors ${activeTool === 'zoom' ? 'text-off-black bg-gray-100 ring-2 ring-gray-300' : 'text-gray-500 hover:text-off-black hover:bg-gray-100'}`}
+                    className={`p-1.5 rounded-full transition-colors ${activeTool === 'zoom' ? 'bg-black text-white' : 'text-gray-500 hover:text-black hover:bg-gray-100'}`}
+                    title="Zoom In"
                 >
-                    <span className="material-symbols-outlined">zoom_in</span>
+                    <span className="material-symbols-outlined text-[20px]">add</span>
                 </button>
+            </div>
+
+            <div
+                ref={canvasRef}
+                className="flex-1 relative overflow-hidden"
+                style={{ cursor: activeTool === 'pan' ? 'grab' : 'default' }}
+            >
+                {isProcessing && <GenerationLoader step={processStep} />}
+
+                {/* Grid Background */}
+                <div
+                    className="absolute inset-0 transition-transform duration-200 pointer-events-none opacity-40"
+                    style={{
+                        backgroundImage: 'radial-gradient(#9ca3af 1px, transparent 1px)',
+                        backgroundSize: '20px 20px',
+                        transform: `scale(${zoomLevel})`
+                    }}
+                ></div>
+
+                <div className="absolute inset-0 w-full h-full">
+                     <DiagramCanvas data={diagramData} onNodeDrag={handleNodeDrag} />
+                </div>
             </div>
         </div>
       </div>
 
-      {/* Simplified Context Menu: Only needed if suggestions panel isn't enough */}
-      {showContextMenu && !isProcessing && !showSuggestions && (
-        <div 
-            className="absolute z-50 w-64 rounded-xl bg-[#212121] text-white shadow-2xl p-2 flex flex-col gap-1 animate-[fadeIn_0.2s_ease-out]"
-            style={{ top: contextMenuPosition.top + 10, left: contextMenuPosition.left }}
-        >
-             {/* ... menu items ... */}
-             {/* Keeping existing menu logic just in case user wants quick access without panel */}
-             <button
-                onClick={() => handleBoltClick({ stopPropagation: () => {} } as any)}
-                className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-white/10 transition-colors text-left group"
-            >
-                <span className="material-symbols-outlined text-sm text-primary">bolt</span>
-                <span className="flex-1 text-sm font-medium">Generar Automático</span>
-            </button>
-        </div>
-      )}
+      {/* Floating Context Button - Improved Position Logic */}
+      {showContextMenu && (
+         <div
+             className="fixed z-50 animate-bounce-in"
+             style={{ top: contextMenuPosition.top - 50, left: contextMenuPosition.left - 20 }}
+         >
+              <button
+                 onMouseDown={handleBoltClick} // Use onMouseDown to prevent focus loss on click
+                 className="flex h-10 w-10 items-center justify-center rounded-full bg-black text-primary shadow-lg hover:scale-110 transition-transform border border-gray-700"
+                 title="Generar Visual"
+             >
+                 <span className="material-symbols-outlined text-xl">bolt</span>
+             </button>
+         </div>
+       )}
 
       <ExportModal
         isOpen={isExportModalOpen}

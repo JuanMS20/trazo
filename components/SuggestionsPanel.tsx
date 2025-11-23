@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 
 interface SuggestionsPanelProps {
   isOpen: boolean;
@@ -74,60 +74,65 @@ const OPTIONS = [
   { id: 'hierarchy', label: 'Tree', icon: Thumbnails.hierarchy },
   { id: 'comparison', label: 'Compare', icon: Thumbnails.comparison },
   { id: 'infographic', label: 'Infographic', icon: Thumbnails.infographic },
-  { id: 'timeline', label: 'Timeline', icon: Thumbnails.timeline }, // Placeholder logic for timeline?
+  { id: 'timeline', label: 'Timeline', icon: Thumbnails.timeline },
 ];
 
 export const SuggestionsPanel: React.FC<SuggestionsPanelProps> = ({ isOpen, onClose, onSelectType, activeType }) => {
   return (
-    <motion.div
-      initial={{ x: -320, opacity: 0 }}
-      animate={{ x: isOpen ? 0 : -320, opacity: isOpen ? 1 : 0 }}
-      transition={{ type: 'spring', stiffness: 300, damping: 30 }}
-      className="absolute top-16 left-4 bottom-4 w-72 bg-[#212121] text-white rounded-xl shadow-2xl z-30 flex flex-col overflow-hidden border border-white/10"
-    >
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-white/10 bg-[#2a2a2a]">
-        <div className="flex items-center gap-2">
-            <span className="material-symbols-outlined text-primary animate-pulse">bolt</span>
-            <h3 className="font-bold text-sm uppercase tracking-wider">AI Suggestions</h3>
-        </div>
-        <button onClick={onClose} className="text-gray-400 hover:text-white">
-            <span className="material-symbols-outlined text-sm">close</span>
-        </button>
-      </div>
+    <AnimatePresence>
+      {isOpen && (
+        <motion.div
+          initial={{ width: 0, opacity: 0 }}
+          animate={{ width: 280, opacity: 1 }}
+          exit={{ width: 0, opacity: 0 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          className="h-full bg-[#212121] text-white flex-shrink-0 flex flex-col overflow-hidden border-r border-white/10"
+        >
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-white/10 bg-[#2a2a2a] min-w-[280px]">
+            <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-primary animate-pulse">bolt</span>
+                <h3 className="font-bold text-sm uppercase tracking-wider">AI Suggestions</h3>
+            </div>
+            <button onClick={onClose} className="text-gray-400 hover:text-white">
+                <span className="material-symbols-outlined text-sm">close</span>
+            </button>
+          </div>
 
-      {/* Grid */}
-      <div className="flex-1 overflow-y-auto p-4">
-        <div className="grid grid-cols-2 gap-3">
-            {OPTIONS.map((opt) => (
-                <button
-                    key={opt.id}
-                    onClick={() => onSelectType(opt.id)}
-                    className={`group relative flex flex-col gap-2 p-2 rounded-lg border transition-all ${
-                        activeType === opt.id
-                        ? 'bg-white/10 border-primary ring-1 ring-primary'
-                        : 'bg-white/5 border-transparent hover:bg-white/10 hover:border-white/20'
-                    }`}
-                >
-                    <div className="aspect-video bg-black/20 rounded overflow-hidden p-2">
-                        {opt.icon}
-                    </div>
-                    <span className="text-xs font-medium text-gray-300 group-hover:text-white text-left pl-1">
-                        {opt.label}
-                    </span>
-                </button>
-            ))}
-        </div>
-
-        <div className="mt-6">
-            <h4 className="text-[10px] font-bold text-gray-500 uppercase mb-3 px-1">Recent Styles</h4>
-            <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-                {[1, 2, 3].map(i => (
-                    <div key={i} className="flex-shrink-0 w-16 h-12 bg-white/5 rounded border border-white/5"></div>
+          {/* Grid */}
+          <div className="flex-1 overflow-y-auto p-4 min-w-[280px]">
+            <div className="grid grid-cols-2 gap-3">
+                {OPTIONS.map((opt) => (
+                    <button
+                        key={opt.id}
+                        onClick={() => onSelectType(opt.id)}
+                        className={`group relative flex flex-col gap-2 p-2 rounded-lg border transition-all ${
+                            activeType === opt.id
+                            ? 'bg-white/10 border-primary ring-1 ring-primary'
+                            : 'bg-white/5 border-transparent hover:bg-white/10 hover:border-white/20'
+                        }`}
+                    >
+                        <div className="aspect-video bg-black/20 rounded overflow-hidden p-2">
+                            {opt.icon}
+                        </div>
+                        <span className="text-xs font-medium text-gray-300 group-hover:text-white text-left pl-1">
+                            {opt.label}
+                        </span>
+                    </button>
                 ))}
             </div>
-        </div>
-      </div>
-    </motion.div>
+
+            <div className="mt-6">
+                <h4 className="text-[10px] font-bold text-gray-500 uppercase mb-3 px-1">Recent Styles</h4>
+                <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
+                    {[1, 2, 3].map(i => (
+                        <div key={i} className="flex-shrink-0 w-16 h-12 bg-white/5 rounded border border-white/5"></div>
+                    ))}
+                </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   );
 };
