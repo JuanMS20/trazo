@@ -1,5 +1,5 @@
-import { DiagramNode, DiagramEdge, DiagramData } from '../types';
-import { layoutDiagram } from './layoutEngine';
+import { DiagramNode, DiagramEdge, DiagramData } from '../../../types';
+import { layoutDiagram } from '../../../shared/utils/layoutEngine';
 
 const API_KEY = process.env.CHUTES_API_KEY;
 const API_URL = process.env.CHUTES_API_URL || "https://llm.chutes.ai/v1/chat/completions";

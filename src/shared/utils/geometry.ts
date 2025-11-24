@@ -1,4 +1,4 @@
-import { DiagramNode } from '../types';
+import { DiagramNode } from '../../types';
 import { findOrthogonalPath } from './routing';
 
 interface Point {

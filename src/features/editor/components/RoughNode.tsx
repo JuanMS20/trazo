@@ -2,9 +2,9 @@ import React, { useEffect, useRef, useState } from 'react';
 import rough from 'roughjs';
 import { motion } from 'framer-motion';
 import Draggable from 'react-draggable';
-import { DiagramNode } from '../types';
+import { DiagramNode } from '../../../types';
 import clsx from 'clsx';
-import { getIconPath } from '../utils/iconLibrary';
+import { getIconPath } from '../../../shared/utils/iconLibrary';
 
 interface RoughNodeProps {
   node: DiagramNode;

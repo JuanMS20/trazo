@@ -5,9 +5,10 @@ import Placeholder from '@tiptap/extension-placeholder';
 import { BubbleMenu } from '@tiptap/react/menus';
 import BubbleMenuExtension from '@tiptap/extension-bubble-menu';
 import { Editor } from '@tiptap/core';
-import { DiagramExtension } from '../extensions/DiagramExtension';
-import { ViewState, DiagramData } from '../types';
-import { AiAgent } from '../utils/aiAgent';
+import { useNavigate, useParams } from 'react-router-dom';
+import { DiagramExtension } from '../tiptap/DiagramExtension';
+import { DiagramData } from '../../../types';
+import { AiAgent } from '../services/aiAgent';
 import { SuggestionsPanel } from '../components/SuggestionsPanel';
 import { GenerationLoader } from '../components/GenerationLoader';
 
@@ -27,10 +28,12 @@ const FloatingMenu = ({ editor, onGenerate }: { editor: Editor, onGenerate: () =
 }
 
 interface WorkspaceProps {
-  onNavigate: (view: ViewState) => void;
+  onNavigate?: any;
 }
 
-export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
+export const EditorPage: React.FC<WorkspaceProps> = () => {
+  const navigate = useNavigate();
+  const { id } = useParams();
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [processStep, setProcessStep] = useState('');
@@ -51,14 +54,14 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
       DiagramExtension,
       BubbleMenuExtension,
     ],
-    content: localStorage.getItem('trazo_editor_content') || '',
+    content: localStorage.getItem(`trazo_editor_content_${id || 'new'}`) || '',
     editorProps: {
       attributes: {
         class: 'prose prose-lg focus:outline-none max-w-none font-serif',
       },
     },
     onUpdate: ({ editor }) => {
-      localStorage.setItem('trazo_editor_content', editor.getHTML());
+      localStorage.setItem(`trazo_editor_content_${id || 'new'}`, editor.getHTML());
     },
     onSelectionUpdate: ({ editor }) => {
        const { from, to } = editor.state.selection;
@@ -183,7 +186,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ onNavigate }) => {
     <div className="flex h-screen w-full flex-col bg-background-light overflow-hidden text-slate-800">
       <header className="h-14 px-4 border-b border-gray-200 flex items-center justify-between bg-white z-20 shrink-0">
         <div className="flex items-center gap-4">
-           <button onClick={() => onNavigate(ViewState.DASHBOARD)} className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600">
+           <button onClick={() => navigate('/dashboard')} className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-600">
              <span className="material-symbols-outlined text-[20px]">grid_view</span>
            </button>
            <h2 className="font-serif text-xl font-medium text-gray-800">Untitled Document</h2>

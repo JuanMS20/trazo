@@ -1,8 +1,8 @@
 import React, { useEffect, useRef } from 'react';
 import rough from 'roughjs';
 import { motion } from 'framer-motion';
-import { DiagramEdge, DiagramNode } from '../types';
-import { calculateEdgePath } from '../utils/geometry';
+import { DiagramEdge, DiagramNode } from '../../../types';
+import { calculateEdgePath } from '../../../shared/utils/geometry';
 
 interface RoughEdgeProps {
   edge: DiagramEdge;

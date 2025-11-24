@@ -1,20 +1,8 @@
-import React, { useEffect } from 'react';
-import { ViewState } from '../types';
+import React from 'react';
 
-interface LoadingProps {
-  onNavigate: (view: ViewState) => void;
-}
+interface LoadingProps {}
 
-export const Loading: React.FC<LoadingProps> = ({ onNavigate }) => {
-  
-  // Simulate loading time
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      onNavigate(ViewState.WORKSPACE);
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, [onNavigate]);
-
+export const Loading: React.FC<LoadingProps> = () => {
   return (
     <div className="flex h-screen w-full bg-background-dark text-white overflow-hidden">
       {/* Sidebar Placeholder (Dimmed) */}

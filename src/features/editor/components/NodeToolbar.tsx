@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { DiagramNode } from '../../types';
-import { ICON_PATHS, getIconPath } from '../../utils/iconLibrary';
+import { DiagramNode } from '../../../types';
+import { ICON_PATHS, getIconPath } from '../../../shared/utils/iconLibrary';
 
 interface NodeToolbarProps {
   node: DiagramNode;

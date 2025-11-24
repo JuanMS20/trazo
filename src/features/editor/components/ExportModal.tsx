@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { OrganicButton } from './OrganicButton';
+import { OrganicButton } from '../../../shared/components/ui/OrganicButton';
 import { toPng, toSvg } from 'html-to-image';
 import download from 'downloadjs';
 

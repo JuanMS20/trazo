@@ -1,11 +1,13 @@
 import React from 'react';
-import { ViewState } from '../types';
+import { useNavigate } from 'react-router-dom';
 
 interface LoginProps {
-  onNavigate: (view: ViewState) => void;
+  onNavigate?: any; // Deprecated, kept for interface compatibility if needed
 }
 
-export const Login: React.FC<LoginProps> = ({ onNavigate }) => {
+export const LoginPage: React.FC<LoginProps> = () => {
+  const navigate = useNavigate();
+
   return (
     <div className="relative flex min-h-screen w-full flex-col items-center justify-center bg-cream overflow-hidden">
       {/* Decorative Doodles */}
@@ -33,7 +35,7 @@ export const Login: React.FC<LoginProps> = ({ onNavigate }) => {
           </p>
 
           <button 
-            onClick={() => onNavigate(ViewState.DASHBOARD)}
+            onClick={() => navigate('/dashboard')}
             className="w-full flex items-center justify-center gap-3 py-3 px-6 bg-white border-2 border-off-black rounded-[10px_12px_11px_13px/11px_10px_13px_12px] hover:shadow-[2px_2px_0px_0px_rgba(30,41,59,1)] hover:-translate-y-[1px] transition-all font-bold text-off-black"
           >
              <svg className="w-5 h-5" viewBox="0 0 24 24" width="24" height="24" xmlns="http://www.w3.org/2000/svg">

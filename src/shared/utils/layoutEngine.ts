@@ -1,6 +1,6 @@
 import dagre from 'dagre';
 import * as d3 from 'd3-force';
-import { DiagramNode, DiagramEdge, DiagramData } from '../types';
+import { DiagramNode, DiagramEdge, DiagramData } from '../../types';
 
 // Helper to estimate dimensions based on text
 const estimateDimensions = (node: DiagramNode) => {

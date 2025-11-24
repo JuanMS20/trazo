@@ -1,12 +1,12 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { NodeViewWrapper, NodeViewProps } from '@tiptap/react';
-import { DiagramCanvas } from '../DiagramCanvas';
-import { DiagramData, DiagramNode } from '../../types';
+import { DiagramCanvas } from '../components/DiagramCanvas';
+import { DiagramData, DiagramNode } from '../../../types';
 import * as htmlToImage from 'html-to-image';
 import download from 'downloadjs';
-import { generateSvgString } from '../../utils/svgGenerator';
+import { generateSvgString } from '../../../shared/utils/svgGenerator';
 import { v4 as uuidv4 } from 'uuid';
-import { NodeToolbar } from './NodeToolbar';
+import { NodeToolbar } from '../components/NodeToolbar';
 
 export const DiagramNodeView: React.FC<NodeViewProps> = ({ node, updateAttributes, selected }) => {
   const data = node.attrs.data as DiagramData | null;

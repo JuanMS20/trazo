@@ -1,16 +1,17 @@
 import React, { useState } from 'react';
-import { ViewState } from '../types';
-import { OrganicButton } from '../components/OrganicButton';
-import { OrganicCard } from '../components/OrganicCard';
-import { useNotes } from '../context/NoteContext';
+import { useNavigate } from 'react-router-dom';
+import { OrganicButton } from '../../../shared/components/ui/OrganicButton';
+import { OrganicCard } from '../../../shared/components/ui/OrganicCard';
+import { useNotes } from '../../../core/context/NoteContext';
 
 interface DashboardProps {
-  onNavigate: (view: ViewState) => void;
+  onNavigate?: any;
 }
 
 type FilterType = 'ALL' | 'FAVORITES' | 'TRASH';
 
-export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
+export const DashboardPage: React.FC<DashboardProps> = () => {
+  const navigate = useNavigate();
   const { notes } = useNotes();
   const [filter, setFilter] = useState<FilterType>('ALL');
 
@@ -99,7 +100,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
               </svg>
             </h1>
             <OrganicButton 
-                onClick={() => onNavigate(ViewState.LOADING)}
+                onClick={() => navigate('/editor')}
                 className="px-6 h-12 text-lg"
             >
                 Nuevo Trazo
@@ -109,7 +110,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {filteredNotes.length > 0 ? (
                 filteredNotes.map((note) => (
-                <OrganicCard key={note.id} note={note} onClick={() => onNavigate(ViewState.WORKSPACE)} />
+                <OrganicCard key={note.id} note={note} onClick={() => navigate(`/editor/${note.id}`)} />
                 ))
             ) : (
                 <div className="col-span-full flex flex-col items-center justify-center py-20 opacity-50">

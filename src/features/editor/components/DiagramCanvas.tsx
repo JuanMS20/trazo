@@ -1,10 +1,10 @@
-import React, { useRef, useEffect, useState, useMemo } from 'react';
-import { DiagramData, DiagramNode } from '../types';
+import React, { useRef, useState } from 'react';
+import { DiagramData, DiagramNode } from '../../../types';
 import { RoughNode } from './RoughNode';
 import { RoughEdge } from './RoughEdge';
 import { TransformWrapper, TransformComponent, useControls } from 'react-zoom-pan-pinch';
-import * as d3 from 'd3-force';
-import { v4 as uuidv4 } from 'uuid';
+import { useDiagramPhysics } from '../hooks/useDiagramPhysics';
+import { useDiagramDrag } from '../hooks/useDiagramInteraction';
 
 interface DiagramCanvasProps {
   data: DiagramData | null;
@@ -35,64 +35,14 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
   onNodesForceUpdate
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const simulationRef = useRef<any>(null);
 
-  const [localNodes, setLocalNodes] = useState<DiagramNode[]>([]);
-  const [snapLines, setSnapLines] = useState<{ x?: number, y?: number }>({});
-
-  useEffect(() => {
-    if (data?.nodes) {
-        setLocalNodes(data.nodes);
-    }
-  }, [data?.nodes]);
-
-  // Setup Physics Simulation
-  useEffect(() => {
-    if (!localNodes.length) return;
-
-    const nodes = localNodes.map(n => ({ ...n }));
-
-    const simulation = d3.forceSimulation(nodes as any)
-        .force("collide", d3.forceCollide().radius((d: any) => Math.max(d.width, d.height) / 2 + 10).strength(0.5).iterations(2))
-        .force("charge", d3.forceManyBody().strength(-100))
-        .alphaDecay(0.1)
-        .stop();
-
-    simulationRef.current = simulation;
-
-    return () => {
-        simulation.stop();
-    };
-  }, []);
-
-  useEffect(() => {
-      if (!simulationRef.current || !data?.nodes) return;
-
-      const simulation = simulationRef.current;
-      const currentNodes = localNodes;
-
-      simulation.nodes(currentNodes);
-      simulation.alpha(0.3).restart();
-
-      simulation.on("tick", () => {
-          setLocalNodes(prev => prev.map(n => {
-              const d3Node = currentNodes.find(dn => dn.id === n.id) as any;
-              // Only update if not currently being dragged/fixed?
-              // Ideally d3Node.fx is set if dragged.
-              if (d3Node && (d3Node.fx == null) && (d3Node.fy == null) && (Math.abs(d3Node.x - n.x) > 1 || Math.abs(d3Node.y - n.y) > 1)) {
-                  return { ...n, x: d3Node.x, y: d3Node.y };
-              }
-              return n;
-          }));
-      });
-
-      simulation.on("end", () => {
-          if (onNodesForceUpdate) {
-              onNodesForceUpdate(currentNodes);
-          }
-      });
-
-  }, [data?.nodes.length]);
+  const { localNodes, setLocalNodes, simulationRef } = useDiagramPhysics(data?.nodes || [], onNodesForceUpdate);
+  const { snapLines, handleNodeDrag, handleNodeDragStop } = useDiagramDrag({
+      localNodes,
+      setLocalNodes,
+      simulationRef,
+      onNodeDrag
+  });
 
   const [connectionState, setConnectionState] = useState<{
       isConnecting: boolean;
@@ -142,93 +92,6 @@ export const DiagramCanvas: React.FC<DiagramCanvasProps> = ({
   const handleMouseUp = () => {
       if (connectionState.isConnecting) {
            setConnectionState({ isConnecting: false, fromId: null, mousePos: { x: 0, y: 0 }, startNodeCenter: { x: 0, y: 0 } });
-      }
-  };
-
-  // Snapping Logic
-  const handleNodeDrag = (id: string, x: number, y: number) => {
-      const THRESHOLD = 5;
-      let newX = x;
-      let newY = y;
-      let snapX: number | undefined;
-      let snapY: number | undefined;
-
-      const draggingNode = localNodes.find(n => n.id === id);
-      if (!draggingNode) return;
-
-      // Check alignment with other nodes
-      localNodes.forEach(other => {
-          if (other.id === id) return;
-
-          // Center-to-Center X
-          if (Math.abs(other.x - x) < THRESHOLD) {
-              newX = other.x;
-              snapX = other.x;
-          }
-          // Center-to-Center Y
-          if (Math.abs(other.y - y) < THRESHOLD) {
-              newY = other.y;
-              snapY = other.y;
-          }
-
-          // Edge alignment?
-          // Left align: (x - w/2) vs (other.x - other.w/2)
-          // For simplicity, sticking to Center alignment as per primary requirement ("alinee con los centros").
-          // The prompt says "centros o bordes". Let's add simple edge check if center didn't snap.
-
-          if (snapX === undefined) {
-              const left = x - draggingNode.width/2;
-              const right = x + draggingNode.width/2;
-              const otherLeft = other.x - other.width/2;
-              const otherRight = other.x + other.width/2;
-
-              if (Math.abs(left - otherLeft) < THRESHOLD) { newX = otherLeft + draggingNode.width/2; snapX = otherLeft; }
-              else if (Math.abs(left - otherRight) < THRESHOLD) { newX = otherRight + draggingNode.width/2; snapX = otherRight; }
-              else if (Math.abs(right - otherRight) < THRESHOLD) { newX = otherRight - draggingNode.width/2; snapX = otherRight; }
-              else if (Math.abs(right - otherLeft) < THRESHOLD) { newX = otherLeft - draggingNode.width/2; snapX = otherLeft; }
-          }
-
-           if (snapY === undefined) {
-              const top = y - draggingNode.height/2;
-              const bottom = y + draggingNode.height/2;
-              const otherTop = other.y - other.height/2;
-              const otherBottom = other.y + other.height/2;
-
-              if (Math.abs(top - otherTop) < THRESHOLD) { newY = otherTop + draggingNode.height/2; snapY = otherTop; }
-              else if (Math.abs(top - otherBottom) < THRESHOLD) { newY = otherBottom + draggingNode.height/2; snapY = otherBottom; }
-              else if (Math.abs(bottom - otherBottom) < THRESHOLD) { newY = otherBottom - draggingNode.height/2; snapY = otherBottom; }
-              else if (Math.abs(bottom - otherTop) < THRESHOLD) { newY = otherTop - draggingNode.height/2; snapY = otherTop; }
-          }
-      });
-
-      setSnapLines({ x: snapX, y: snapY });
-
-      // Update local state immediately
-      setLocalNodes(prev => prev.map(n => n.id === id ? { ...n, x: newX, y: newY } : n));
-
-      // Override Physics
-      if (simulationRef.current) {
-          const simNode = simulationRef.current.nodes().find((n: any) => n.id === id);
-          if (simNode) {
-              simNode.fx = newX;
-              simNode.fy = newY;
-          }
-          simulationRef.current.alpha(0.1).restart();
-      }
-  };
-
-  const handleNodeDragStop = (id: string, x: number, y: number) => {
-      setSnapLines({});
-      onNodeDrag(id, x, y); // Commit to parent
-
-      // Release Physics
-      if (simulationRef.current) {
-          const simNode = simulationRef.current.nodes().find((n: any) => n.id === id);
-          if (simNode) {
-              simNode.fx = null;
-              simNode.fy = null;
-          }
-          simulationRef.current.alpha(0.3).restart();
       }
   };
 

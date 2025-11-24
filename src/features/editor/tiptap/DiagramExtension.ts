@@ -1,6 +1,6 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer } from '@tiptap/react';
-import { DiagramNodeView } from '../components/editor/DiagramNodeView';
+import { DiagramNodeView } from './DiagramNodeView';
 
 export const DiagramExtension = Node.create({
   name: 'diagram',

@@ -1,5 +1,5 @@
 import rough from 'roughjs';
-import { DiagramData, DiagramNode, DiagramEdge } from '../types';
+import { DiagramData, DiagramNode, DiagramEdge } from '../../types';
 import { calculateEdgePath } from './geometry';
 
 export const generateSvgString = (data: DiagramData): string => {
